@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>497437703 的个人主页</title>
+  <meta name="description" content="497437703-create 的个人主页。正在做一台 ESP32-S3 履带小机器人。">
+  <meta property="og:title" content="497437703 的个人主页">
+  <meta property="og:description" content="把想法做成会动的东西。正在做一台 ESP32-S3 履带小机器人。">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://497437703-create.github.io/">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,640&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f4efe6;
+      --ink: #221c16;
+      --muted: #6e6258;
+      --line: #e3d4c4;
+      --accent: #c24b24;
+      --card: #fffaf4;
+      --shadow: 0 18px 50px rgba(60, 36, 16, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(900px 420px at 100% -10%, rgba(194, 75, 36, 0.12), transparent 60%),
+        linear-gradient(180deg, #f7f2ea 0%, var(--bg) 280px);
+      font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-size: 17px;
+      line-height: 1.7;
+    }
+
+    a { color: inherit; }
+
+    .wrap {
+      width: min(880px, calc(100% - 40px));
+      margin: 0 auto;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 28px 0 8px;
+      font-size: 14px;
+      letter-spacing: 0.04em;
+    }
+
+    .mark {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      font-weight: 700;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 6px rgba(194, 75, 36, 0.15);
+    }
+
+    nav { display: flex; gap: 22px; }
+
+    nav a {
+      color: var(--muted);
+      text-decoration: none;
+    }
+
+    nav a:hover { color: var(--ink); }
+
+    .hero { padding: 72px 0 36px; }
+
+    .eyebrow {
+      margin: 0 0 18px;
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      max-width: 11em;
+      font-family: Fraunces, "Songti SC", "Noto Serif SC", serif;
+      font-size: clamp(46px, 8vw, 84px);
+      font-weight: 560;
+      line-height: 1.02;
+      letter-spacing: -0.03em;
+    }
+
+    h1 em {
+      font-style: italic;
+      font-weight: 640;
+      color: var(--accent);
+    }
+
+    .lead {
+      max-width: 38em;
+      margin: 28px 0 0;
+      color: var(--muted);
+      font-size: 18px;
+    }
+
+    section { padding: 28px 0 10px; }
+
+    h2 {
+      margin: 0 0 18px;
+      font-family: Fraunces, "Songti SC", serif;
+      font-size: 28px;
+      font-weight: 560;
+    }
+
+    .card {
+      display: grid;
+      grid-template-columns: 180px 1fr;
+      gap: 28px;
+      padding: 28px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+    }
+
+    .machine {
+      display: grid;
+      place-items: center;
+      min-height: 160px;
+      border-radius: 16px;
+      background:
+        linear-gradient(160deg, #2a241e, #14110e 70%);
+    }
+
+    .machine svg { width: 120px; height: 90px; }
+
+    .status {
+      display: inline-block;
+      margin-bottom: 8px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: #f6e3d4;
+      color: #8a3b1d;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .card h3 {
+      margin: 0 0 8px;
+      font-size: 24px;
+      font-family: Fraunces, "Songti SC", serif;
+      font-weight: 560;
+    }
+
+    .card p { margin: 0 0 16px; color: var(--muted); }
+
+    ul {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    li {
+      display: flex;
+      gap: 10px;
+      padding: 7px 0;
+      border-top: 1px solid var(--line);
+    }
+
+    li span { color: var(--muted); min-width: 4.5em; }
+
+    .contact {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .contact a {
+      display: block;
+      padding: 22px 24px;
+      text-decoration: none;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+    }
+
+    .contact a:hover { border-color: #c9a88f; }
+
+    .contact small {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .contact strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 18px;
+    }
+
+    footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 48px 0 36px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    @media (max-width: 700px) {
+      .card, .contact, footer { grid-template-columns: 1fr; display: grid; }
+      footer { gap: 6px; }
+      header { align-items: flex-start; }
+      nav { gap: 14px; }
+      .hero { padding-top: 42px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <a class="mark" href="#top"><span class="dot"></span>497437703-create</a>
+      <nav>
+        <a href="#work">项目</a>
+        <a href="#contact">联系</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <p class="eyebrow">个人主页</p>
+        <h1>把想法做成<em>会动</em>的东西。</h1>
+        <p class="lead">你好，我是 497437703-create。这个页面用来放我正在做的东西。眼下桌上是一台小机器人：ESP32-S3 负责思考，履带走路，舵机张望，摄像头看路。</p>
+      </section>
+
+      <section id="work">
+        <h2>正在做</h2>
+        <article class="card">
+          <div class="machine" aria-hidden="true">
+            <svg viewBox="0 0 120 90" fill="none">
+              <rect x="18" y="34" width="84" height="36" rx="8" fill="#f4efe6"/>
+              <rect x="34" y="18" width="52" height="24" rx="8" fill="#f6c453"/>
+              <circle cx="52" cy="30" r="5" fill="#221c16"/>
+              <circle cx="74" cy="30" r="5" fill="#221c16"/>
+              <rect x="8" y="42" width="14" height="24" rx="4" fill="#c24b24"/>
+              <rect x="98" y="42" width="14" height="24" rx="4" fill="#c24b24"/>
+              <rect x="22" y="72" width="28" height="8" rx="3" fill="#8d8378"/>
+              <rect x="70" y="72" width="28" height="8" rx="3" fill="#8d8378"/>
+            </svg>
+          </div>
+          <div>
+            <span class="status">本地调试中</span>
+            <h3>履带小机器人</h3>
+            <p>基于 ESP32-S3 的一台小车。手机连上它自己的热点，就能打开控制页，让它前进、转向，或者抬头看看周围。</p>
+            <ul>
+              <li><span>主控</span> ESP32-S3，带 OV2640 摄像头</li>
+              <li><span>行走</span> 履带前进、后退、左右转</li>
+              <li><span>动作</span> 舵机回中，也能左右张望</li>
+              <li><span>控制</span> 热点 Wall-E-AI，手机打开控制页</li>
+            </ul>
+          </div>
+        </article>
+      </section>
+
+      <section id="contact">
+        <h2>联系</h2>
+        <div class="contact">
+          <a href="https://github.com/497437703-create">
+            <small>GitHub</small>
+            <strong>497437703-create</strong>
+          </a>
+          <a href="mailto:497437703@qq.com">
+            <small>邮箱</small>
+            <strong>497437703@qq.com</strong>
+          </a>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <span>用 GitHub Pages 发布</span>
+      <span>2026</span>
+    </footer>
+  </div>
+</body>
+</html>
