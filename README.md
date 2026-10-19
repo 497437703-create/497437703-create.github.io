@@ -1,4 +1,4 @@
-# 个人主页
+# 敏哥AI
 
 静态页面，发布在 [https://497437703-create.github.io/](https://497437703-create.github.io/)。
 

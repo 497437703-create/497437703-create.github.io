@@ -3,10 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>497437703 的个人主页</title>
-  <meta name="description" content="497437703-create 的个人主页。正在做一台 ESP32-S3 履带小机器人。">
-  <meta property="og:title" content="497437703 的个人主页">
-  <meta property="og:description" content="把想法做成会动的东西。正在做一台 ESP32-S3 履带小机器人。">
+  <title>敏哥AI</title>
+  <meta name="description" content="敏哥AI 的个人主页。正在做一台 ESP32-S3 履带小机器人。">
+  <meta property="og:title" content="敏哥AI">
+  <meta property="og:description" content="敏哥AI 的个人主页。把想法做成会动的东西。">
+  <meta property="og:image" content="https://497437703-create.github.io/portrait.jpg">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://497437703-create.github.io/">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -79,7 +80,27 @@
 
     nav a:hover { color: var(--ink); }
 
-    .hero { padding: 72px 0 36px; }
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(200px, 280px) 1fr;
+      gap: 40px;
+      align-items: end;
+      padding: 48px 0 36px;
+    }
+
+    .portrait {
+      margin: 0;
+    }
+
+    .portrait img {
+      display: block;
+      width: 100%;
+      aspect-ratio: 3 / 4;
+      object-fit: cover;
+      border-radius: 22px;
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
 
     .eyebrow {
       margin: 0 0 18px;
@@ -222,14 +243,18 @@
       footer { gap: 6px; }
       header { align-items: flex-start; }
       nav { gap: 14px; }
-      .hero { padding-top: 42px; }
+      .hero {
+        grid-template-columns: 1fr;
+        padding-top: 28px;
+      }
+      .portrait { max-width: 280px; }
     }
   </style>
 </head>
 <body>
   <div class="wrap">
     <header>
-      <a class="mark" href="#top"><span class="dot"></span>497437703-create</a>
+      <a class="mark" href="#top"><span class="dot"></span>敏哥AI</a>
       <nav>
         <a href="#work">项目</a>
         <a href="#contact">联系</a>
@@ -238,9 +263,14 @@
 
     <main id="top">
       <section class="hero">
-        <p class="eyebrow">个人主页</p>
-        <h1>把想法做成<em>会动</em>的东西。</h1>
-        <p class="lead">你好，我是 497437703-create。这个页面用来放我正在做的东西。眼下桌上是一台小机器人：ESP32-S3 负责思考，履带走路，舵机张望，摄像头看路。</p>
+        <figure class="portrait">
+          <img src="portrait.jpg" alt="敏哥AI">
+        </figure>
+        <div>
+          <p class="eyebrow">个人主页</p>
+          <h1>敏哥AI</h1>
+          <p class="lead">你好，我是敏哥AI。这个页面用来放我正在做的东西。眼下桌上是一台小机器人：ESP32-S3 负责思考，履带走路，舵机张望，摄像头看路。</p>
+        </div>
       </section>
 
       <section id="work">
