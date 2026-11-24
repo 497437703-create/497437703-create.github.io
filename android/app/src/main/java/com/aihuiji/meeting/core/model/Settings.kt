@@ -27,6 +27,18 @@ enum class ScreenSizeClass(val inches: Int, val inRoomCaptionSp: Int, val panelC
     IN98(98, 44, 30),
 }
 
+/** Window rectangle in physical pixels; [w] == 0 means "not placed yet, use the default". */
+@Serializable
+data class BarBounds(val x: Int = 0, val y: Int = 0, val w: Int = 0, val h: Int = 0) {
+    val isSet: Boolean get() = w > 0 && h > 0
+}
+
+/** Top-left of the minimised floating icon in physical pixels; negative means "not placed yet". */
+@Serializable
+data class IconPos(val x: Int = -1, val y: Int = -1) {
+    val isSet: Boolean get() = x >= 0 && y >= 0
+}
+
 @Serializable
 data class AppSettings(
     val onboardingDone: Boolean = false,
@@ -37,7 +49,6 @@ data class AppSettings(
     val activeProfileId: String = "enterprise",
     /** Falling back from enterprise to Lenovo cloud sends data off-premises: off unless an admin allows it. */
     val allowCloudFallback: Boolean = false,
-    val defaultLayout: PanelLayout = PanelLayout.SPLIT,
     val primaryLang: Lang = Lang.ZH,
     val autoDetect: Boolean = false,
     val translationEnabled: Boolean = false,
@@ -54,6 +65,10 @@ data class AppSettings(
     val localCacheLimit: Int = 20,
     val adminPinHash: String? = null,
     val vcAppPackage: String = "com.tencent.wemeet.app",
+    /** Last choice of 视频会议 (capture the far end through playback capture) in the start sheet. */
+    val remoteAudio: Boolean = false,
+    val captionBar: BarBounds = BarBounds(),
+    val captionIcon: IconPos = IconPos(),
 ) {
     val activeProfile: ServerProfile get() = profiles.firstOrNull { it.id == activeProfileId } ?: profiles.first()
     fun profile(kind: ProfileKind): ServerProfile? = profiles.firstOrNull { it.kind == kind }
@@ -63,7 +78,6 @@ data class AppSettings(
 @Serializable
 data class MeetingConfig(
     val mode: MeetingMode,
-    val layout: PanelLayout,
     val primaryLang: Lang,
     val autoDetect: Boolean,
     val translationEnabled: Boolean,

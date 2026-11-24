@@ -49,11 +49,11 @@ internal object DemoScript {
         ),
         line(
             "R1", ContentTag.VIEWPOINT,
-            zh = "演示可以先用分屏模式，悬浮窗放到下一个版本。",
-            en = "For the demo we can use split-screen first and move the floating window to the next release.",
-            fr = "Pour la démo, nous pouvons d'abord utiliser l'écran partagé et reporter la fenêtre flottante à la prochaine version.",
-            de = "Für die Demo können wir zunächst den geteilten Bildschirm nutzen und das schwebende Fenster verschieben.",
-            ja = "デモはまず分割画面モードで行い、フローティングウィンドウは次のバージョンに回せます。",
+            zh = "演示可以先用底部字幕条，字幕条可以随时缩成悬浮图标。",
+            en = "For the demo we can use the bottom caption bar first, and it can collapse into a floating icon at any time.",
+            fr = "Pour la démo, nous pouvons utiliser la barre de sous-titres en bas, réductible à tout moment en icône flottante.",
+            de = "Für die Demo können wir die Untertitelleiste unten nutzen, die sich jederzeit zu einem schwebenden Symbol verkleinern lässt.",
+            ja = "デモはまず画面下部の字幕バーで行い、いつでも浮かぶアイコンに縮小できます。",
         ),
         line(
             "S2", ContentTag.TOPIC,
@@ -73,11 +73,11 @@ internal object DemoScript {
         ),
         line(
             "S1", ContentTag.DECISION,
-            zh = "好，那就定方案 B：月底演示用分屏模式，悬浮窗下个版本再做。",
-            en = "OK, let's go with plan B: split-screen for the end-of-month demo, floating window in the next release.",
-            fr = "Bien, retenons le plan B : écran partagé pour la démo de fin de mois, fenêtre flottante dans la prochaine version.",
-            de = "Gut, dann Plan B: geteilter Bildschirm für die Demo am Monatsende, schwebendes Fenster in der nächsten Version.",
-            ja = "では案Bで決定します。月末のデモは分割画面、フローティングウィンドウは次のバージョンで対応します。",
+            zh = "好，那就定方案 B：月底演示用底部字幕条，悬浮图标随版本一起交付。",
+            en = "OK, let's go with plan B: the bottom caption bar for the end-of-month demo, with the floating icon shipping alongside.",
+            fr = "Bien, retenons le plan B : la barre de sous-titres en bas pour la démo de fin de mois, avec l'icône flottante.",
+            de = "Gut, dann Plan B: die Untertitelleiste unten für die Demo am Monatsende, samt schwebendem Symbol.",
+            ja = "では案Bで決定します。月末のデモは下部の字幕バーで行い、浮かぶアイコンも一緒に提供します。",
         ),
         line(
             "S1", ContentTag.DECISION,

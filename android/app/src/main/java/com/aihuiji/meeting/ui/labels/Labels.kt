@@ -133,6 +133,14 @@ object Labels {
         CaptionSize.XL -> R.string.size_xl
     }
 
+    @StringRes
+    fun barFont(s: CaptionSize): Int = when (s) {
+        CaptionSize.S -> R.string.bar_font_s
+        CaptionSize.M -> R.string.bar_font_m
+        CaptionSize.L -> R.string.bar_font_l
+        CaptionSize.XL -> R.string.bar_font_xl
+    }
+
     fun speakerName(context: Context, speaker: Speaker?): String =
         speaker?.name ?: context.getString(R.string.speaker_n, speaker?.ordinal ?: 0)
 

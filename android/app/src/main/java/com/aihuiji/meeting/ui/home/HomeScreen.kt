@@ -55,6 +55,9 @@ import com.aihuiji.meeting.core.model.MeetingRecord
 import com.aihuiji.meeting.core.model.MeetingState
 import com.aihuiji.meeting.core.model.formatClock
 import com.aihuiji.meeting.core.provider.HealthResult
+import com.aihuiji.meeting.meeting.LiveMeeting
+import com.aihuiji.meeting.service.CaptionBarService
+import com.aihuiji.meeting.ui.meeting.EndConfirmDialog
 import com.aihuiji.meeting.core.provider.ProviderLocation
 import com.aihuiji.meeting.ui.components.BrandWordmark
 import com.aihuiji.meeting.ui.components.PrimaryButton
@@ -84,13 +87,16 @@ fun HomeScreen(
     onOpenMeeting: (String) -> Unit,
     onHistory: () -> Unit,
     onSettings: () -> Unit,
+    onOpenLive: () -> Unit,
 ) {
     val ctx = LocalContext.current
     val container = ctx.container
     val settings by container.settings.settings.collectAsStateWithLifecycle()
     val meetings by container.repository.meetings.collectAsStateWithLifecycle()
     var server by remember { mutableStateOf<ServerStatus>(ServerStatus.Checking) }
-    var startMode by remember { mutableStateOf<MeetingMode?>(null) }
+    var showStart by remember { mutableStateOf(false) }
+    var confirmEnd by remember { mutableStateOf(false) }
+    val live by container.meetingController.live.collectAsStateWithLifecycle()
     var recordOnlyHint by remember { mutableStateOf(false) }
     var selfCheckOnly by remember { mutableStateOf(false) }
     var dismissedRecovery by remember { mutableStateOf(false) }
@@ -154,21 +160,29 @@ fun HomeScreen(
             }
 
             Spacer(Modifier.weight(0.6f))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(48.dp, Alignment.CenterHorizontally)) {
-                StartCard(
-                    icon = Icons.Outlined.Groups,
-                    title = stringResource(R.string.start_inroom),
-                    subtitle = stringResource(R.string.start_inroom_sub),
-                    accent = stringResource(R.string.start_inroom_accent),
-                    onClick = { startMode = MeetingMode.IN_ROOM; recordOnlyHint = server == ServerStatus.Down },
-                )
-                StartCard(
-                    icon = Icons.Outlined.VideoCall,
-                    title = stringResource(R.string.start_video),
-                    subtitle = stringResource(R.string.start_video_sub),
-                    accent = stringResource(R.string.start_video_accent),
-                    onClick = { startMode = MeetingMode.VIDEO; recordOnlyHint = server == ServerStatus.Down },
-                )
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                val running = live
+                if (running == null) {
+                    StartHero(
+                        title = stringResource(R.string.start_meeting),
+                        subtitle = stringResource(R.string.start_meeting_sub),
+                        onClick = { showStart = true; recordOnlyHint = server == ServerStatus.Down },
+                    )
+                } else {
+                    val overlayOk = remember(now, running) { android.provider.Settings.canDrawOverlays(ctx) }
+                    RunningCard(
+                        live = running,
+                        overlayOk = overlayOk,
+                        onShowBar = {
+                            if (overlayOk) {
+                                container.meetingController.setBarMinimized(false)
+                                CaptionBarService.show(ctx)
+                                (ctx as? android.app.Activity)?.moveTaskToBack(true)
+                            } else onOpenLive()
+                        },
+                        onEnd = { confirmEnd = true },
+                    )
+                }
             }
             if (server == ServerStatus.Down) {
                 Spacer(Modifier.height(16.dp))
@@ -206,12 +220,11 @@ fun HomeScreen(
             }
         }
 
-        startMode?.let { mode ->
-            StartFlow(
-                mode = mode,
-                serverDown = recordOnlyHint,
-                onCancel = { startMode = null },
-            )
+        if (showStart && live == null) {
+            StartFlow(serverDown = recordOnlyHint, onCancel = { showStart = false })
+        }
+        if (confirmEnd && live != null) {
+            EndConfirmDialog(onContinue = { confirmEnd = false }, onEnd = { confirmEnd = false; container.meetingController.end() })
         }
         if (selfCheckOnly) {
             SelfCheckOverlay(mode = MeetingMode.VIDEO, standalone = true, onProceed = { selfCheckOnly = false }, onCancel = { selfCheckOnly = false })
@@ -232,36 +245,74 @@ private fun HomeBackdrop() {
     )
 }
 
+private val HeroSize = androidx.compose.ui.unit.DpSize(1240.dp, 380.dp)
+
 @Composable
-private fun StartCard(icon: ImageVector, title: String, subtitle: String, accent: String, onClick: () -> Unit) {
+private fun HeroChip(icon: ImageVector, text: String) {
+    Row(
+        Modifier.clip(RoundedCornerShape(28.dp)).background(Color.White.copy(alpha = 0.18f)).padding(horizontal = 22.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, tint = Color.White, modifier = Modifier.size(32.dp))
+        Spacer(Modifier.width(10.dp))
+        Text(text, style = Type.Label, color = Color.White)
+    }
+}
+
+/** One start button for room and video meetings alike; the video/remote-audio choice lives in the pre-meeting sheet. */
+@Composable
+private fun StartHero(title: String, subtitle: String, onClick: () -> Unit) {
     Box(
         Modifier
-            .size(720.dp, 400.dp)
-            .clip(RoundedCornerShape(40.dp))
+            .size(HeroSize)
+            .clip(RoundedCornerShape(44.dp))
             .background(Brush.linearGradient(listOf(Palette.Brand400, Palette.Brand500, Palette.Brand700)))
             .background(Palette.GlassTopHighlight)
             .pressable(onClick = onClick)
-            .padding(48.dp),
+            .padding(56.dp),
     ) {
-        Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(96.dp).clip(RoundedCornerShape(28.dp)).background(Color.White.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
-                    Icon(icon, null, tint = Color.White, modifier = Modifier.size(60.dp))
-                }
-                Spacer(Modifier.width(20.dp))
-                Text(
-                    accent,
-                    style = Type.Label,
-                    color = Color.White,
-                    modifier = Modifier.clip(RoundedCornerShape(24.dp)).background(Color.White.copy(alpha = 0.18f)).padding(horizontal = 20.dp, vertical = 6.dp),
-                )
+        Column(Modifier.align(Alignment.CenterStart)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                HeroChip(Icons.Outlined.Groups, stringResource(R.string.start_meeting_chip_room))
+                HeroChip(Icons.Outlined.VideoCall, stringResource(R.string.start_meeting_chip_video))
             }
-            Spacer(Modifier.weight(1f))
-            Text(title, style = Type.Display.copy(fontSize = 60.sp, lineHeight = 72.sp), color = Color.White)
-            Spacer(Modifier.height(8.dp))
-            Text(subtitle, style = Type.Body, color = Color.White.copy(alpha = 0.85f))
+            Spacer(Modifier.height(36.dp))
+            Text(title, style = Type.Display.copy(fontSize = 76.sp, lineHeight = 88.sp), color = Color.White)
+            Spacer(Modifier.height(10.dp))
+            Text(subtitle, style = Type.Body, color = Color.White.copy(alpha = 0.88f))
         }
-        Waveform(level = 0.65f, modifier = Modifier.align(Alignment.TopEnd), color = Color.White.copy(alpha = 0.7f), maxHeight = 96.dp, barWidth = 12.dp, gap = 9.dp)
+        Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically) {
+            Waveform(level = 0.65f, color = Color.White.copy(alpha = 0.7f), maxHeight = 120.dp, barWidth = 14.dp, gap = 10.dp)
+            Spacer(Modifier.width(40.dp))
+            Box(Modifier.size(150.dp).clip(RoundedCornerShape(75.dp)).background(Color.White.copy(alpha = 0.22f)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Outlined.Mic, null, tint = Color.White, modifier = Modifier.size(80.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun RunningCard(live: LiveMeeting, overlayOk: Boolean, onShowBar: () -> Unit, onEnd: () -> Unit) {
+    val paused = live.isPaused
+    Row(
+        Modifier.size(HeroSize).glass(44.dp, color = Palette.Bg1).padding(56.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(20.dp).clip(RoundedCornerShape(10.dp)).background(if (paused) Palette.Warning else Palette.Danger))
+                Spacer(Modifier.width(14.dp))
+                Text(stringResource(R.string.running_title), style = Type.TitleM, color = Palette.Text2)
+            }
+            Spacer(Modifier.height(16.dp))
+            Text(formatClock(live.elapsedMs), style = Type.Display.copy(fontSize = 96.sp, lineHeight = 108.sp, fontFeatureSettings = "tnum"))
+            Spacer(Modifier.height(8.dp))
+            Text(live.record.title, style = Type.Body, color = Palette.Text2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(24.dp), horizontalAlignment = Alignment.End) {
+            PrimaryButton(stringResource(if (overlayOk) R.string.running_show_bar else R.string.running_open_live), onShowBar, height = 104.dp)
+            SecondaryButton(stringResource(R.string.running_end), onEnd, height = 88.dp)
+        }
     }
 }
 

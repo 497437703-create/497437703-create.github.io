@@ -75,7 +75,7 @@
             android:foregroundServiceType="microphone|mediaProjection" />
 
         <service
-            android:name=".service.FloatingPanelService"
+            android:name=".service.CaptionBarService"
             android:exported="false" />
 
         <provider

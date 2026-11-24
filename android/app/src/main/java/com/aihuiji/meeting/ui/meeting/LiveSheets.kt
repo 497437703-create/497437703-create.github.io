@@ -53,7 +53,6 @@ import com.aihuiji.meeting.core.model.CaptionSize
 import com.aihuiji.meeting.core.model.Lang
 import com.aihuiji.meeting.core.model.MarkTag
 import com.aihuiji.meeting.core.model.MeetingMode
-import com.aihuiji.meeting.core.model.PanelLayout
 import com.aihuiji.meeting.core.model.TranslationDisplay
 import com.aihuiji.meeting.core.model.formatClock
 import com.aihuiji.meeting.core.provider.ProviderLocation
@@ -209,16 +208,6 @@ fun MoreSheet(model: LiveUiModel, onClose: () -> Unit, onShare: () -> Unit) {
             Spacer(Modifier.height(12.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 ToolAction(Icons.Outlined.QrCode2, stringResource(R.string.action_share_qr), onShare)
-                val toVideo = live.presentation == MeetingMode.IN_ROOM
-                ToolAction(
-                    if (toVideo) Icons.Outlined.Videocam else Icons.Outlined.Groups,
-                    stringResource(if (toVideo) R.string.action_to_video_layout else R.string.action_to_inroom_layout),
-                    { model.controller.setPresentation(if (toVideo) MeetingMode.VIDEO else MeetingMode.IN_ROOM); onClose() },
-                )
-                if (live.presentation == MeetingMode.VIDEO) {
-                    Chip(stringResource(R.string.layout_split), live.layout == PanelLayout.SPLIT, { model.controller.setLayout(PanelLayout.SPLIT) }, height = 88.dp)
-                    Chip(stringResource(R.string.layout_floating), live.layout == PanelLayout.FLOATING, { model.controller.setLayout(PanelLayout.FLOATING) }, height = 88.dp)
-                }
                 ToolAction(Icons.Outlined.GraphicEq, stringResource(R.string.action_detect_audio), { model.controller.retryMic(); onClose() })
                 if (live.location == ProviderLocation.DEMO) {
                     ToolAction(Icons.Outlined.SignalWifiConnectedNoInternet4, stringResource(R.string.action_simulate_outage), { model.controller.simulateOutage(); onClose() })

@@ -24,6 +24,7 @@ object Palette {
     val Text1 = Color(0xFFF5F2FC)
     val Text2 = Color(0xFFB9B0D0)
     val TextTrans = Color(0xFFD8C6FF)
+    val BarTrans = Color(0xFF7CB8FF)
     val Success = Color(0xFF4ADE9A)
     val Warning = Color(0xFFFFC24D)
     val Danger = Color(0xFFFF5C7A)

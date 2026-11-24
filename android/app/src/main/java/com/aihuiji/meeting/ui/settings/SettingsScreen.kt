@@ -46,7 +46,8 @@ import com.aihuiji.meeting.R
 import com.aihuiji.meeting.container
 import com.aihuiji.meeting.core.model.CaptionSize
 import com.aihuiji.meeting.core.model.Lang
-import com.aihuiji.meeting.core.model.PanelLayout
+import com.aihuiji.meeting.core.model.BarBounds
+import com.aihuiji.meeting.core.model.IconPos
 import com.aihuiji.meeting.core.model.ScreenSizeClass
 import com.aihuiji.meeting.core.model.ServerProfile
 import com.aihuiji.meeting.core.model.Templates
@@ -118,8 +119,7 @@ private fun SettingsContent(onBack: () -> Unit, onPermissions: () -> Unit) {
                 }
                 Section(stringResource(R.string.settings_meeting_defaults)) {
                     Labeled(stringResource(R.string.field_panel_layout)) {
-                        Chip(stringResource(R.string.layout_split), s.defaultLayout == PanelLayout.SPLIT, { update { it.copy(defaultLayout = PanelLayout.SPLIT) } })
-                        Chip(stringResource(R.string.layout_floating), s.defaultLayout == PanelLayout.FLOATING, { update { it.copy(defaultLayout = PanelLayout.FLOATING) } })
+                        Chip(stringResource(R.string.bar_reset), false, { update { it.copy(captionBar = BarBounds(), captionIcon = IconPos()) } })
                     }
                     Labeled(stringResource(R.string.field_recognition_lang)) {
                         Lang.entries.forEach { l -> Chip(l.nativeName, s.primaryLang == l, { update { it.copy(primaryLang = l) } }) }

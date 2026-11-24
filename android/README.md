@@ -30,8 +30,10 @@ speakers and minutes. No server is needed for a walkthrough.
 
 | Area | Where |
 |---|---|
-| In-room meeting, full-screen captions (S04) | `ui/meeting/LiveMeetingScreen.kt` |
-| Video meeting beside Tencent Meeting: split screen by default (`FLAG_ACTIVITY_LAUNCH_ADJACENT`), floating panel when the split isn't possible (S05/S06) | `vc/VcLauncher.kt`, `service/FloatingPanelService.kt` |
+| One start button for room and video meetings (a 视频会议 switch in the start sheet picks the mode) | `ui/home/HomeScreen.kt`, `ui/home/StartFlow.kt` |
+| Caption bar: docked at the bottom of the display (default 1660x400 dp), resizable from every edge/corner, bounds remembered; toolbar with pause / mark / notes / language / font / hide-original / more / minimize / end | `service/CaptionBarService.kt`, `ui/meeting/CaptionBar.kt` |
+| Minimize collapses the bar into an animated floating icon (brand logo, level-reactive ticks, timer); tap to restore | `ui/meeting/MinimizedIcon.kt` |
+| Video meeting: the conferencing app opens full screen and the caption bar floats above it (needs the "display over other apps" permission; without it the bar stays inside this app) | `vc/VcLauncher.kt`, `service/CaptionBarService.kt`, `ui/meeting/LiveMeetingScreen.kt` |
 | USB omni-mic capture, AEC/NS, far-end capture via MediaProjection playback capture | `audio/AudioCaptureEngine.kt`, `audio/AudioDevices.kt` |
 | Pre-meeting sheet, self-check, capture consent (S03/S16b) | `ui/home/StartFlow.kt` |
 | Speaker labels, speed notes (mark/excerpt/tags), notes drawer | `ui/meeting/Captions.kt`, `ui/meeting/LiveSheets.kt` |
@@ -66,6 +68,7 @@ Settings flags it as unencrypted.
   Platform AEC then also removes the far end from the mic, so remote speech would be missing.
   The panel shows "仅记录本地声音" only when the user declines capture or capture fails to start,
   not in this silent case. This is the top on-device check.
-- Whether the G1 launcher honours `FLAG_ACTIVITY_LAUNCH_ADJACENT` for Tencent Meeting. If it
-  doesn't, the app falls back to the floating panel automatically.
+- Whether the G1 grants `SYSTEM_ALERT_WINDOW` to a sideloaded build (Settings > Apps > AI 会记 >
+  Display over other apps) and whether its palm/touch filter lets the caption bar edges be dragged.
+  Without the permission the caption bar is shown inside the app only.
 - Name and AEC behaviour of the USB omni mic, through `AudioDevices.bestMic`.

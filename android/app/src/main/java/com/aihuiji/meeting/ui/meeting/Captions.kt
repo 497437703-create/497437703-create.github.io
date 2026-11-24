@@ -80,6 +80,7 @@ data class CaptionStyle(
     val showChannelBadges: Boolean,
     val wide: Boolean,
     val backdrop: Float,
+    val bar: Boolean = false,
 )
 
 object CaptionSizing {
@@ -99,6 +100,9 @@ object CaptionSizing {
 
     fun panel(base: ScreenSizeClass, size: CaptionSize): Int =
         (base.panelCaptionSp + step(size) * 4).coerceIn(26, 40)
+
+    fun bar(base: ScreenSizeClass, size: CaptionSize): Int =
+        (base.panelCaptionSp + 8 + step(size) * 6).coerceIn(30, 64)
 
     private fun step(size: CaptionSize) = when (size) {
         CaptionSize.S -> -1
@@ -155,7 +159,7 @@ fun CaptionList(
             modifier = Modifier.fillMaxSize(),
             contentPadding = contentPadding,
             reverseLayout = true,
-            verticalArrangement = Arrangement.spacedBy(if (style.wide) 32.dp else 22.dp, Alignment.Bottom),
+            verticalArrangement = Arrangement.spacedBy(if (style.bar) 12.dp else if (style.wide) 32.dp else 22.dp, Alignment.Bottom),
         ) {
             items(newestFirst, key = { it.id }) { seg ->
                 CaptionBlock(
@@ -197,6 +201,10 @@ fun CaptionBlock(
     onLongPress: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    if (style.bar) {
+        BarCaptionBlock(segment, speaker, style, onLongPress, modifier)
+        return
+    }
     val avatar: Dp = if (style.wide) 64.dp else 52.dp
     val textStyle = Type.Body.copy(
         fontSize = style.sizeSp.sp,
@@ -335,6 +343,79 @@ fun SegmentActionMenu(
                     )
                 }
             }
+        }
+    }
+}
+
+
+/** Compact caption paragraph for the bottom caption bar: speaker tag inline, translation in blue underneath. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun BarCaptionBlock(
+    segment: Segment,
+    speaker: Speaker?,
+    style: CaptionStyle,
+    onLongPress: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val size = style.sizeSp.toFloat()
+    val translations = if (style.translationOn) style.targets.filter { it != segment.lang } else emptyList()
+    val showOriginal = style.display != TranslationDisplay.TRANSLATION_ONLY || translations.isEmpty()
+    val remoteShort = androidx.compose.ui.res.stringResource(R.string.channel_remote_short)
+    val pending = androidx.compose.ui.res.stringResource(R.string.translation_pending)
+    val speakerColor = Palette.speaker(speaker?.colorIndex ?: 0)
+    val name = Labels.speakerName(speaker)
+    val remote = style.showChannelBadges && speaker?.channel == com.aihuiji.meeting.core.model.Channel.REMOTE
+
+    fun androidx.compose.ui.text.AnnotatedString.Builder.header() {
+        if (style.showAvatars) {
+            withStyle(SpanStyle(color = speakerColor, fontWeight = FontWeight.Bold, fontSize = (size * 0.62f).sp)) {
+                append(if (remote) "$name · $remoteShort" else name)
+                append("   ")
+            }
+        }
+        if (style.showTimestamps) {
+            withStyle(SpanStyle(color = Palette.Text2, fontSize = (size * 0.5f).sp)) { append(formatClock(segment.startMs) + "   ") }
+        }
+    }
+
+    val base = Type.Body.copy(fontSize = size.sp, lineHeight = (size * 1.38f).sp, fontWeight = FontWeight.Medium)
+    Column(
+        modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = {},
+                onLongClick = onLongPress,
+            )
+            .padding(vertical = 2.dp)
+            .animateContentSize(tween(120)),
+    ) {
+        if (showOriginal) {
+            Text(
+                buildAnnotatedString {
+                    header()
+                    if (segment.isFinal) append(segment.text) else {
+                        withStyle(SpanStyle(color = Palette.Text2)) { append(segment.text) }
+                        withStyle(SpanStyle(color = Palette.Brand400)) { append("▍") }
+                    }
+                },
+                style = base,
+                color = Palette.Text1,
+            )
+        }
+        translations.forEachIndexed { index, lang ->
+            val text = segment.translations[lang]
+            Text(
+                buildAnnotatedString {
+                    if (!showOriginal && index == 0) header()
+                    withStyle(SpanStyle(fontSize = (size * 0.46f).sp, fontWeight = FontWeight.Bold, color = Palette.BarTrans.copy(alpha = 0.7f))) { append(lang.tag + "  ") }
+                    if (text != null) append(text) else withStyle(SpanStyle(color = Palette.BarTrans.copy(alpha = 0.45f))) { append(pending) }
+                },
+                style = base.copy(fontSize = (size - 2).sp, lineHeight = ((size - 2) * 1.38f).sp, fontWeight = FontWeight.Normal),
+                color = Palette.BarTrans,
+            )
         }
     }
 }

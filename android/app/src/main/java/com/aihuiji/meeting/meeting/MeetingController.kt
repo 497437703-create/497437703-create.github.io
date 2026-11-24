@@ -17,7 +17,6 @@ import com.aihuiji.meeting.core.model.MeetingRecord
 import com.aihuiji.meeting.core.model.MeetingState
 import com.aihuiji.meeting.core.model.MeetingStateMachine
 import com.aihuiji.meeting.core.model.Note
-import com.aihuiji.meeting.core.model.PanelLayout
 import com.aihuiji.meeting.core.model.Segment
 import com.aihuiji.meeting.core.model.Speaker
 import com.aihuiji.meeting.core.model.TimeRange
@@ -31,7 +30,7 @@ import com.aihuiji.meeting.core.provider.ProviderLocation
 import com.aihuiji.meeting.core.provider.demo.DemoAsrSession
 import com.aihuiji.meeting.data.MeetingRepository
 import com.aihuiji.meeting.data.SettingsStore
-import com.aihuiji.meeting.service.FloatingPanelService
+import com.aihuiji.meeting.service.CaptionBarService
 import com.aihuiji.meeting.service.MeetingForegroundService
 import com.aihuiji.meeting.service.ProjectionConsent
 import kotlinx.coroutines.CoroutineScope
@@ -65,9 +64,8 @@ data class LiveMeeting(
     val activeSpeakerId: String? = null,
     val mic: MicStatus? = null,
     val far: FarStatus = FarStatus.NOT_NEEDED,
-    val layout: PanelLayout = config.layout,
-    /** In-room full-screen vs video side panel; switchable mid-meeting (F-08/F-09). */
-    val presentation: MeetingMode = config.mode,
+    /** The caption bar is collapsed to the floating icon. */
+    val barMinimized: Boolean = false,
     val translationEnabled: Boolean = config.translationEnabled,
     val targetLangs: List<Lang> = config.targetLangs,
     val location: ProviderLocation = ProviderLocation.DEMO,
@@ -157,7 +155,7 @@ class MeetingController(
         scope.launch { repository.save(record) }
 
         MeetingForegroundService.start(context, micGranted = mic !is MicStatus.NoPermission, consent = projectionConsent)
-        if (config.mode == MeetingMode.VIDEO && config.layout == PanelLayout.FLOATING) FloatingPanelService.show(context)
+        CaptionBarService.show(context)
 
         val channels = if (wantsFar) setOf(Channel.LOCAL, Channel.REMOTE) else setOf(Channel.LOCAL)
         if (config.recordOnly) {
@@ -225,9 +223,8 @@ class MeetingController(
         _live.update { it?.copy(record = next) }
     }
 
-    fun setLayout(layout: PanelLayout) {
-        _live.update { it?.copy(layout = layout) }
-        if (layout == PanelLayout.FLOATING) FloatingPanelService.show(context) else FloatingPanelService.hide(context)
+    fun setBarMinimized(minimized: Boolean) {
+        _live.update { it?.copy(barMinimized = minimized) }
     }
 
     fun setTranslation(enabled: Boolean, targets: List<Lang>) {
@@ -252,15 +249,16 @@ class MeetingController(
             state = MeetingState.ENDING,
             pausedRanges = if (live.isPaused) live.record.pausedRanges + TimeRange(pausedAt, elapsed()) else live.record.pausedRanges,
         )
-        _live.update { it?.copy(record = ending) }
         _generation.value = Generation(ending.id, 0f)
+        _live.update { it?.copy(record = ending) }
+        CaptionBarService.hide(context)
         scope.launch {
             asr?.runCatching { finish() }
             val files = engine?.stop().orEmpty()
             asr?.close()
             jobs.forEach { it.cancel() }
             jobs.clear()
-            FloatingPanelService.hide(context)
+            CaptionBarService.hide(context)
             MeetingForegroundService.stop(context)
             val latest = _live.value?.record ?: ending
             val finished = latest.copy(
@@ -344,11 +342,6 @@ class MeetingController(
 
     fun retagMark(id: String, tag: MarkTag) {
         _live.update { it?.copy(record = it.record.copy(marks = it.record.marks.map { m -> if (m.id == id) m.copy(tag = tag) else m })) }
-    }
-
-    fun setPresentation(mode: MeetingMode) {
-        _live.update { it?.copy(presentation = mode) }
-        if (mode == MeetingMode.IN_ROOM) FloatingPanelService.hide(context)
     }
 
     fun liveShareUrl(record: MeetingRecord): String {

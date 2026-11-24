@@ -59,7 +59,6 @@ import com.aihuiji.meeting.core.model.CaptionSize
 import com.aihuiji.meeting.core.model.Lang
 import com.aihuiji.meeting.core.model.MeetingConfig
 import com.aihuiji.meeting.core.model.MeetingMode
-import com.aihuiji.meeting.core.model.PanelLayout
 import com.aihuiji.meeting.core.model.Templates
 import com.aihuiji.meeting.device.CheckItem
 import com.aihuiji.meeting.device.CheckResult
@@ -86,7 +85,7 @@ private enum class Step { SHEET, CHECK, CAPTURE }
 
 /** S03 → S16b → capture consent card → meeting start (two touches on the happy path). */
 @Composable
-fun StartFlow(mode: MeetingMode, serverDown: Boolean, onCancel: () -> Unit) {
+fun StartFlow(serverDown: Boolean, onCancel: () -> Unit) {
     val ctx = LocalContext.current
     val container = ctx.container
     val settings by container.settings.settings.collectAsStateWithLifecycle()
@@ -94,8 +93,7 @@ fun StartFlow(mode: MeetingMode, serverDown: Boolean, onCancel: () -> Unit) {
     var config by remember {
         mutableStateOf(
             MeetingConfig(
-                mode = mode,
-                layout = settings.defaultLayout,
+                mode = if (settings.remoteAudio) MeetingMode.VIDEO else MeetingMode.IN_ROOM,
                 primaryLang = settings.primaryLang,
                 autoDetect = settings.autoDetect,
                 translationEnabled = settings.translationEnabled,
@@ -113,27 +111,27 @@ fun StartFlow(mode: MeetingMode, serverDown: Boolean, onCancel: () -> Unit) {
     val vcMissing = stringResource(R.string.toast_vc_missing)
 
     fun launch(consent: ProjectionConsent?) {
-        var cfg = config
-        if (cfg.mode == MeetingMode.VIDEO && cfg.layout == PanelLayout.FLOATING && !Settings.canDrawOverlays(ctx)) {
-            cfg = cfg.copy(layout = PanelLayout.SPLIT)
-            Toast.makeText(ctx, floatFallback, Toast.LENGTH_LONG).show()
-        }
+        val cfg = config
+        val overlayOk = Settings.canDrawOverlays(ctx)
         container.settings.update {
             it.copy(
                 primaryLang = cfg.primaryLang, autoDetect = cfg.autoDetect, translationEnabled = cfg.translationEnabled,
-                targetLangs = cfg.targetLangs.ifEmpty { it.targetLangs }, templateId = cfg.templateId, defaultLayout = cfg.layout,
+                targetLangs = cfg.targetLangs.ifEmpty { it.targetLangs }, templateId = cfg.templateId,
+                remoteAudio = cfg.mode == MeetingMode.VIDEO,
             )
         }
         val stamp = SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date())
         container.meetingController.start(cfg, "${if (cfg.mode == MeetingMode.IN_ROOM) inRoomTitle else videoTitle} · $stamp", consent)
+        if (!overlayOk) Toast.makeText(ctx, floatFallback, Toast.LENGTH_LONG).show()
         if (cfg.mode == MeetingMode.VIDEO) {
             val app = VcLauncher.installedApp(ctx, settings.vcAppPackage)
             when {
                 app == null -> Toast.makeText(ctx, vcMissing, Toast.LENGTH_LONG).show()
-                cfg.layout == PanelLayout.SPLIT -> VcLauncher.launchAdjacent(ctx, app.packageName)
-                else -> VcLauncher.launchFullscreen(ctx, app.packageName)
+                overlayOk -> VcLauncher.launchFullscreen(ctx, app.packageName)
+                else -> VcLauncher.launchAdjacent(ctx, app.packageName)
             }
         }
+        if (overlayOk) (ctx as? Activity)?.moveTaskToBack(true)
         onCancel()
     }
 
@@ -151,10 +149,10 @@ fun StartFlow(mode: MeetingMode, serverDown: Boolean, onCancel: () -> Unit) {
             onStart = { step = Step.CHECK },
         )
         Step.CHECK -> SelfCheckOverlay(
-            mode = mode,
+            mode = config.mode,
             standalone = false,
             recordOnly = config.recordOnly,
-            onProceed = { if (mode == MeetingMode.VIDEO) step = Step.CAPTURE else launch(null) },
+            onProceed = { if (config.mode == MeetingMode.VIDEO) step = Step.CAPTURE else launch(null) },
             onCancel = { step = Step.SHEET },
         )
         Step.CAPTURE -> CaptureConsentCard(
@@ -192,16 +190,23 @@ private fun PreMeetingSheet(
                     .padding(48.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        stringResource(if (config.mode == MeetingMode.IN_ROOM) R.string.start_inroom else R.string.start_video),
-                        style = Type.TitleL,
-                    )
+                    Text(stringResource(R.string.start_meeting), style = Type.TitleL)
                     Spacer(Modifier.weight(1f))
                     IconCircleButton(Icons.Outlined.Close, stringResource(R.string.action_close), onCancel, size = 72.dp)
                 }
                 Spacer(Modifier.height(8.dp))
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(28.dp)) {
                     Spacer(Modifier.height(8.dp))
+                    Field(stringResource(R.string.field_remote_audio)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            BigSwitch(config.mode == MeetingMode.VIDEO, { on ->
+                                onChange(config.copy(mode = if (on) MeetingMode.VIDEO else MeetingMode.IN_ROOM))
+                            })
+                            Spacer(Modifier.width(20.dp))
+                            Text(stringResource(R.string.field_remote_audio_hint), style = Type.Caption, modifier = Modifier.weight(1f))
+                        }
+                    }
+                    OverlayPermissionRow()
                     Field(stringResource(R.string.field_recognition_lang)) {
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Chip(stringResource(R.string.lang_auto), config.autoDetect, { onChange(config.copy(autoDetect = !config.autoDetect)) })
@@ -241,14 +246,6 @@ private fun PreMeetingSheet(
                             }
                         }
                     }
-                    if (config.mode == MeetingMode.VIDEO) {
-                        Field(stringResource(R.string.field_panel_layout)) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Chip(stringResource(R.string.layout_split_default), config.layout == PanelLayout.SPLIT, { onChange(config.copy(layout = PanelLayout.SPLIT)) })
-                                Chip(stringResource(R.string.layout_floating), config.layout == PanelLayout.FLOATING, { onChange(config.copy(layout = PanelLayout.FLOATING)) })
-                            }
-                        }
-                    }
                     Field(stringResource(R.string.field_font_size)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             CaptionSize.entries.forEach { size ->
@@ -283,6 +280,43 @@ private fun PreMeetingSheet(
                     height = 96.dp,
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun OverlayPermissionRow() {
+    val ctx = LocalContext.current
+    var granted by remember { mutableStateOf(Settings.canDrawOverlays(ctx)) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            granted = Settings.canDrawOverlays(ctx)
+            delay(1_000)
+        }
+    }
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Palette.Bg1).padding(horizontal = 24.dp, vertical = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            if (granted) Icons.Outlined.CheckCircle else Icons.Outlined.WarningAmber,
+            null,
+            tint = if (granted) Palette.Success else Palette.Warning,
+            modifier = Modifier.size(36.dp),
+        )
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(stringResource(if (granted) R.string.overlay_granted else R.string.overlay_needed_title), style = Type.Label)
+            if (!granted) Text(stringResource(R.string.overlay_needed_body), style = Type.Caption)
+        }
+        if (!granted) {
+            Spacer(Modifier.width(16.dp))
+            SecondaryButton(stringResource(R.string.overlay_grant), {
+                ctx.startActivity(
+                    android.content.Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.fromParts("package", ctx.packageName, null))
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            }, height = 72.dp)
         }
     }
 }

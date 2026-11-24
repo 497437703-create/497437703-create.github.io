@@ -54,12 +54,14 @@
     <string name="action_undo">撤销</string>
 
     <!-- Home -->
-    <string name="start_inroom">会议室会议</string>
-    <string name="start_inroom_sub">全屏字幕 · 一键开录</string>
-    <string name="start_inroom_accent">线下</string>
-    <string name="start_video">视频会议</string>
-    <string name="start_video_sub">与腾讯会议分屏 · 双通道记录</string>
-    <string name="start_video_accent">远程</string>
+    <string name="start_meeting">开始会议</string>
+    <string name="start_meeting_sub">会议室或视频会议都从这里开始 · 字幕条悬浮在屏幕底部</string>
+    <string name="start_meeting_chip_room">会议室</string>
+    <string name="start_meeting_chip_video">视频会议</string>
+    <string name="running_title">会议进行中</string>
+    <string name="running_show_bar">回到字幕条</string>
+    <string name="running_open_live">打开字幕</string>
+    <string name="running_end">结束会议</string>
     <string name="recent_meetings">最近会议</string>
     <string name="recent_empty">还没有会议记录</string>
     <string name="recovery_banner">「%1$s」意外中断，已保存的内容可恢复</string>
@@ -74,12 +76,20 @@
     <string name="mic_status_no_permission">麦克风未授权</string>
     <string name="title_inroom">会议室会议</string>
     <string name="title_video">视频会议</string>
-    <string name="toast_floating_needs_permission">未开启悬浮窗权限，已改用分屏</string>
+    <string name="toast_floating_needs_permission">未开启悬浮窗权限，字幕条将显示在应用内</string>
     <string name="toast_vc_missing">未找到视频会议应用，请手动打开</string>
 
     <!-- Pre-meeting / self-check -->
     <string name="field_font_size">字幕字号</string>
-    <string name="field_panel_layout">面板布局</string>
+    <string name="field_panel_layout">字幕条</string>
+    <string name="field_remote_audio">视频会议</string>
+    <string name="field_remote_audio_hint">同时采集对端声音（需授权录屏）；会议应用将全屏打开，字幕条悬浮其上</string>
+    <string name="overlay_needed_title">需要「显示在其他应用上层」权限</string>
+    <string name="overlay_needed_body">授权后字幕条可悬浮在会议应用之上；否则字幕只在本应用内显示</string>
+    <string name="overlay_grant">去授权</string>
+    <string name="overlay_granted">悬浮字幕条已就绪</string>
+    <string name="bar_reset">恢复默认位置与大小</string>
+    <string name="bar_reset_done">已恢复</string>
     <string name="field_recognition_lang">识别语言</string>
     <string name="field_server_profile">服务器</string>
     <string name="field_server_profile_hint">识别、翻译与纪要均在该服务器完成</string>
@@ -322,4 +332,17 @@
     <!-- Notifications -->
     <string name="notif_channel_meeting">会议记录</string>
     <string name="notif_recording">AI 会记正在记录会议</string>
+    <!-- Caption bar -->
+    <string name="bar_language">语言</string>
+    <string name="bar_recognition">识别语言：%1$s</string>
+    <string name="bar_hide_original">关闭原文</string>
+    <string name="bar_show_original">显示原文</string>
+    <string name="bar_font_s">小字号</string>
+    <string name="bar_font_m">标准字号</string>
+    <string name="bar_font_l">大字号</string>
+    <string name="bar_font_xl">特大字号</string>
+    <string name="action_minimize">最小化</string>
+    <string name="fallback_title">字幕条显示在本应用内</string>
+    <string name="fallback_body">授予「显示在其他应用上层」权限后，字幕条可悬浮在腾讯会议等应用之上，并可自由移动、缩放与最小化为悬浮图标。</string>
+    <string name="fallback_back_home">返回主页</string>
 </resources>

@@ -3,6 +3,7 @@ package com.aihuiji.meeting
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -23,12 +24,11 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.aihuiji.meeting.core.model.MeetingMode
-import com.aihuiji.meeting.core.model.PanelLayout
-import com.aihuiji.meeting.service.FloatingPanelService
+import com.aihuiji.meeting.core.model.MeetingState
 import com.aihuiji.meeting.ui.history.HistoryScreen
 import com.aihuiji.meeting.ui.home.HomeScreen
 import com.aihuiji.meeting.ui.meeting.LiveMeetingScreen
+import com.aihuiji.meeting.ui.meeting.RawPointer
 import com.aihuiji.meeting.ui.onboarding.PermissionsScreen
 import com.aihuiji.meeting.ui.onboarding.SplashScreen
 import com.aihuiji.meeting.ui.settings.SettingsScreen
@@ -50,12 +50,14 @@ sealed interface Route {
 class MainActivity : ComponentActivity() {
     private val stack: SnapshotStateList<Route> = mutableStateListOf(Route.Splash)
     private var pendingDeepLink by mutableStateOf<Uri?>(null)
+    private var overlayGranted by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         immersive()
         pendingDeepLink = intent?.data
+        overlayGranted = Settings.canDrawOverlays(this)
         if (savedInstanceState != null) stack.apply { clear(); add(Route.Home) }
         setContent { AiHuijiTheme { AppNav() } }
     }
@@ -70,24 +72,14 @@ class MainActivity : ComponentActivity() {
         if (hasFocus) immersive()
     }
 
-    override fun onStart() {
-        super.onStart()
-        val live = container.meetingController.live.value
-        if (live != null && live.layout == PanelLayout.SPLIT) FloatingPanelService.hide(this)
-    }
-
-    override fun onStop() {
-        super.onStop()
-        // Split screen is the default; when the user leaves the split (or it never formed), keep captions
-        // available through the floating panel so the meeting is never "invisible".
-        val live = container.meetingController.live.value ?: return
-        if (live.presentation == MeetingMode.VIDEO && !isChangingConfigurations && !isInMultiWindowMode) {
-            FloatingPanelService.show(this)
-        }
+    override fun onResume() {
+        super.onResume()
+        overlayGranted = Settings.canDrawOverlays(this)
     }
 
     /** Palm rejection for large boards: drop very large contact areas (forearm/palm resting on glass). */
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        RawPointer.update(ev)
         val palmPx = 40f * resources.displayMetrics.density
         if (ev.actionMasked == MotionEvent.ACTION_DOWN && ev.touchMajor > palmPx * 3) return true
         return super.dispatchTouchEvent(ev)
@@ -121,11 +113,18 @@ class MainActivity : ComponentActivity() {
         val generation by controller.generation.collectAsStateWithLifecycle()
         val settings by container.settings.settings.collectAsStateWithLifecycle()
 
-        LaunchedEffect(live != null) {
-            if (live != null) push(Route.Live)
-            else if (stack.lastOrNull() == Route.Live) {
-                val id = generation?.meetingId
-                if (id != null) replaceTop(Route.Generating(id)) else home()
+        val running = live != null
+        val ending = live?.record?.state == MeetingState.ENDING
+        val generationId = generation?.meetingId
+        LaunchedEffect(running, ending, overlayGranted, generationId) {
+            val topRoute = stack.lastOrNull()
+            when {
+                ending && generationId != null ->
+                    if (topRoute == Route.Live) replaceTop(Route.Generating(generationId))
+                    else if (topRoute !is Route.Generating) push(Route.Generating(generationId))
+                running && !overlayGranted -> push(Route.Live)
+                running && topRoute == Route.Live -> stack.removeAt(stack.lastIndex)
+                !running && topRoute == Route.Live -> if (generationId != null) replaceTop(Route.Generating(generationId)) else home()
             }
         }
         LaunchedEffect(pendingDeepLink, stack.firstOrNull()) {
@@ -157,8 +156,9 @@ class MainActivity : ComponentActivity() {
                     },
                     onHistory = { push(Route.History) },
                     onSettings = { push(Route.Settings) },
+                    onOpenLive = { push(Route.Live) },
                 )
-                Route.Live -> LiveMeetingScreen()
+                Route.Live -> LiveMeetingScreen(onMinimize = { if (stack.lastOrNull() == Route.Live) stack.removeAt(stack.lastIndex) })
                 is Route.Generating -> GeneratingScreen(route.id, onDone = { replaceTop(Route.Summary(route.id)) }, onHome = ::home)
                 is Route.Summary -> SummaryScreen(route.id, onBack = { if (stack.size > 1) stack.removeAt(stack.lastIndex) else home() })
                 Route.History -> HistoryScreen(

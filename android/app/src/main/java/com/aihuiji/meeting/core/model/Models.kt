@@ -22,9 +22,6 @@ enum class Lang(val code: String, val nativeName: String, val tag: String) {
 enum class MeetingMode { IN_ROOM, VIDEO }
 
 @Serializable
-enum class PanelLayout { SPLIT, FLOATING }
-
-@Serializable
 enum class Channel { LOCAL, REMOTE }
 
 /** F-01 lifecycle. M1 drives IDLE → PREPARING → LIVE ⇄ PAUSED → ENDING → GENERATING → DONE/FAILED. */
