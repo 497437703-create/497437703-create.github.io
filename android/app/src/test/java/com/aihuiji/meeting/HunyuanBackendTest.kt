@@ -9,6 +9,7 @@ import com.aihuiji.meeting.core.model.MeetingMode
 import com.aihuiji.meeting.core.model.MeetingRecord
 import com.aihuiji.meeting.core.model.MeetingState
 import com.aihuiji.meeting.core.model.ProfileKind
+import com.aihuiji.meeting.core.model.SecretSlot
 import com.aihuiji.meeting.core.model.Segment
 import com.aihuiji.meeting.core.model.ServerProfile
 import com.aihuiji.meeting.core.model.Speaker
@@ -44,8 +45,10 @@ import kotlinx.serialization.json.Json
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
 import okio.ByteString
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -341,6 +344,77 @@ class HunyuanBackendTest {
         val h2 = cloud.gateway.health() as HealthResult.Unavailable
         assertEquals(ProviderErrorKind.NOT_CONFIGURED, h2.error?.kind)
         assertFalse(h2.error!!.onPrem)
+    }
+
+    @Test
+    fun sch900sMeetingRunsEndToEndBehindTheProviderInterfaces() = runBlocking {
+        val asrListener = object : WebSocketListener() {
+            var answered = false
+            override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+                if (answered) return
+                answered = true
+                webSocket.send("""{"type":"partial","seg":"s1","ch":"local","text":"我们决定","start":100,"lang":"zh","spk":"S2"}""")
+                webSocket.send("""{"type":"final","seg":"s1","ch":"local","text":"我们决定把发布日期定在十月二十号。","start":100,"end":2600,"lang":"zh","spk":"S2"}""")
+            }
+
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                if ("\"end\"" in text) webSocket.send("""{"type":"closed"}""")
+            }
+
+            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                webSocket.close(1000, null)
+            }
+        }
+        val minutesJson = """{"overview":{"text":"确定发布日期。","refs":[2]},"cards":{"DECISIONS":[{"text":"发布日期定在 10 月 20 日","refs":[2]}],
+            "TODOS":[{"text":"提交测试报告","refs":[3],"owner":"王磊","due":"周五"}]}}"""
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                if (request.getHeader("Authorization") != "Bearer t0k") return MockResponse().setResponseCode(401)
+                val body = request.body.readUtf8()
+                return when (request.path?.substringBefore('?')) {
+                    "/v1/health" -> MockResponse().setBody("""{"status":"ok","modelVersion":"sch900s-test","speakerRecognition":true}""")
+                    "/v1/asr/stream" -> MockResponse().withWebSocketUpgrade(asrListener)
+                    "/v1/chat/completions" -> when {
+                        "会议纪要助手" in body -> completion(minutesJson)
+                        "\"max_tokens\":1" in body -> completion("pong")
+                        else -> completion("We set the launch date to October 20.")
+                    }
+                    "/v1/meetings/m1/share" -> MockResponse().setBody("""{"url":"https://sch900s.test/s/ABCD23","expiresAtEpochMs":99}""")
+                    else -> MockResponse().setResponseCode(404)
+                }
+            }
+        }
+        val profile = ServerProfile("enterprise", ProfileKind.ENTERPRISE, baseUrl = server.url("/").toString().trimEnd('/'), demoBackend = false)
+        val bundle = ProviderFactory(spoolDir) { _, slot -> if (slot == SecretSlot.TOKEN) "t0k" else null }.create(profile)
+        assertEquals(BackendKind.SCH900S_ON_PREM, bundle.backend)
+
+        val health = bundle.gateway.health()
+        assertTrue("$health", health is HealthResult.Ok)
+
+        val session = bundle.asr.open(asrConfig())
+        try {
+            withTimeout(5_000) { session.link.first { it == LinkState.CONNECTED } }
+            val events = async(start = CoroutineStart.UNDISPATCHED) { withTimeout(5_000) { session.events.take(2).toList() } }
+            session.sendAudio(AudioFrame(Channel.LOCAL, 0, ShortArray(320)))
+            val final = events.await().last() as AsrEvent.Final
+            assertEquals("我们决定把发布日期定在十月二十号。", final.text)
+            assertEquals("S2", final.diarizationLabel)
+            withTimeout(5_000) { session.finish() }
+        } finally {
+            session.close()
+        }
+
+        assertEquals("We set the launch date to October 20.", bundle.translation.translate("我们决定把发布日期定在十月二十号。", Lang.ZH, Lang.EN))
+
+        val progress = mutableListOf<Float>()
+        val summary = bundle.minutes.generate(MinutesRequest(record, "general", Lang.ZH)) { progress += it }
+        assertEquals(1f, progress.last())
+        assertEquals(listOf("b"), summary.overview.sourceRefs.map { it.segmentId })
+        val todo = summary.cards.first { it.type == CardType.TODOS }.items.single()
+        assertEquals("王磊", todo.owner)
+        assertEquals(listOf("c"), todo.sourceRefs.map { it.segmentId })
+
+        assertEquals("https://sch900s.test/s/ABCD23", bundle.minutes.createShareLink(record).url)
     }
 
     @Test
