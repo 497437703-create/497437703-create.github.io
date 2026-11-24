@@ -55,13 +55,18 @@ object HeuristicMinutesEngine {
         fun ownerOf(seg: Segment): String? = record.speaker(seg.speakerId)?.let { sp -> sp.name ?: speakerLabel(out, sp.ordinal) }
 
         val cards = template.cards.map { type ->
+            // A point repeated later in the meeting becomes one item that traces to every mention.
             val items = tagged.filter { (_, tags) -> tags.any { it in type.sources } }
+                .map { it.first }
+                .groupBy { normalize(it.text) }
+                .values
                 .take(MAX_ITEMS_PER_CARD)
-                .map { (seg, _) ->
+                .map { mentions ->
+                    val seg = mentions.first()
                     SummaryItem(
                         id = "${type.name}-${seg.id}",
                         text = textOf(seg),
-                        sourceRefs = listOf(ref(seg)),
+                        sourceRefs = mentions.map(::ref),
                         owner = if (type == CardType.TODOS) ownerOf(seg) else null,
                     )
                 }
@@ -69,8 +74,8 @@ object HeuristicMinutesEngine {
         }
 
         val topics = tagged.filter { ContentTag.TOPIC in it.second }.map { it.first }
-        val decisions = tagged.count { ContentTag.DECISION in it.second }
-        val todos = tagged.count { ContentTag.TODO in it.second }
+        val decisions = tagged.filter { ContentTag.DECISION in it.second }.distinctBy { normalize(it.first.text) }.size
+        val todos = tagged.filter { ContentTag.TODO in it.second }.distinctBy { normalize(it.first.text) }.size
         val speakers = segments.map { it.speakerId }.distinct().size
         val overviewSource = (topics.take(2).ifEmpty { segments.take(1) })
         val overview = SummaryItem(
@@ -88,6 +93,8 @@ object HeuristicMinutesEngine {
             generatedAtEpochMs = System.currentTimeMillis(),
         )
     }
+
+    private fun normalize(text: String) = text.filter { it.isLetterOrDigit() }.lowercase()
 
     private fun MarkTag.toContentTag() = when (this) {
         MarkTag.KEY -> ContentTag.TOPIC

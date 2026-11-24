@@ -129,11 +129,12 @@ fun NotesPanel(model: LiveUiModel, modifier: Modifier = Modifier, onClose: (() -
             BasicTextField(
                 value = draft,
                 onValueChange = { draft = it },
+                singleLine = true,
                 textStyle = Type.Body.copy(fontSize = 26.sp, color = Palette.Text1),
                 cursorBrush = SolidColor(Palette.Brand400),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = {
-                    model.controller.addNote(draft, draftTag); draft = ""
+                    if (draft.isNotBlank()) { model.controller.addNote(draft.trim(), draftTag); draft = "" }
                 }),
                 modifier = Modifier.weight(1f).height(72.dp).glass(16.dp).padding(horizontal = 20.dp, vertical = 18.dp),
                 decorationBox = { inner ->

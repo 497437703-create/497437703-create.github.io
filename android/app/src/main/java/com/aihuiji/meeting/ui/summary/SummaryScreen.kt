@@ -298,10 +298,14 @@ private fun SummaryCardView(card: SummaryCard, modifier: Modifier, onTrace: (Sum
                     }
                     Spacer(Modifier.height(8.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        item.owner?.let { StatusPill(it, accent); Spacer(Modifier.width(10.dp)) }
-                        if (item.inferred) StatusPill(stringResource(R.string.inferred), Palette.Warning)
-                        item.sourceRefs.firstOrNull()?.let { Text(formatClock(it.startMs), style = Type.Caption.copy(fontFeatureSettings = "tnum")) }
-                        Spacer(Modifier.weight(1f))
+                        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                            item.owner?.let { StatusPill(it, accent); Spacer(Modifier.width(10.dp)) }
+                            if (item.inferred) StatusPill(stringResource(R.string.inferred), Palette.Warning)
+                            item.sourceRefs.firstOrNull()?.takeIf { item.owner == null }?.let {
+                                Text(formatClock(it.startMs), style = Type.Caption.copy(fontFeatureSettings = "tnum"), maxLines = 1, softWrap = false)
+                            }
+                        }
+                        Spacer(Modifier.width(8.dp))
                         TraceButton { onTrace(item, title) }
                     }
                 }
@@ -313,12 +317,12 @@ private fun SummaryCardView(card: SummaryCard, modifier: Modifier, onTrace: (Sum
 @Composable
 private fun TraceButton(onClick: () -> Unit) {
     Row(
-        Modifier.height(64.dp).clip(CircleShape).background(Palette.Brand700.copy(alpha = 0.35f)).pressable(onClick = onClick).padding(horizontal = 20.dp),
+        Modifier.height(64.dp).clip(CircleShape).background(Palette.Brand700.copy(alpha = 0.35f)).pressable(onClick = onClick).padding(horizontal = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(Icons.Outlined.GpsFixed, null, tint = Palette.TextTrans, modifier = Modifier.size(28.dp))
         Spacer(Modifier.width(8.dp))
-        Text(stringResource(R.string.action_trace), style = Type.Caption, color = Palette.Text1)
+        Text(stringResource(R.string.action_trace), style = Type.Caption, color = Palette.Text1, maxLines = 1, softWrap = false)
     }
 }
 
@@ -516,14 +520,14 @@ private fun TemplatePicker(current: String, onPick: (String) -> Unit, onClose: (
                     Column(
                         Modifier
                             .width(280.dp)
-                            .height(200.dp)
+                            .height(230.dp)
                             .clip(RoundedCornerShape(24.dp))
                             .then(if (selected) Modifier.background(Palette.BrandGradient) else Modifier.glass(24.dp))
                             .pressable { onPick(t.id) }
                             .padding(24.dp),
                     ) {
                         Icon(Labels.templateIcon(t.id), null, tint = Palette.Text1, modifier = Modifier.size(40.dp))
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.weight(1f))
                         Text(stringResource(Labels.template(t.id)), style = Type.TitleM)
                         Spacer(Modifier.height(6.dp))
                         Text(

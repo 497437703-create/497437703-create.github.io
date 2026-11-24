@@ -236,27 +236,30 @@ private fun HomeBackdrop() {
 private fun StartCard(icon: ImageVector, title: String, subtitle: String, accent: String, onClick: () -> Unit) {
     Box(
         Modifier
-            .size(640.dp, 340.dp)
+            .size(720.dp, 400.dp)
             .clip(RoundedCornerShape(40.dp))
             .background(Brush.linearGradient(listOf(Palette.Brand400, Palette.Brand500, Palette.Brand700)))
             .background(Palette.GlassTopHighlight)
             .pressable(onClick = onClick)
-            .padding(44.dp),
+            .padding(48.dp),
     ) {
         Column {
-            Box(Modifier.size(96.dp).clip(RoundedCornerShape(28.dp)).background(Color.White.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
-                Icon(icon, null, tint = Color.White, modifier = Modifier.size(60.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(96.dp).clip(RoundedCornerShape(28.dp)).background(Color.White.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
+                    Icon(icon, null, tint = Color.White, modifier = Modifier.size(60.dp))
+                }
+                Spacer(Modifier.width(20.dp))
+                Text(
+                    accent,
+                    style = Type.Label,
+                    color = Color.White,
+                    modifier = Modifier.clip(RoundedCornerShape(24.dp)).background(Color.White.copy(alpha = 0.18f)).padding(horizontal = 20.dp, vertical = 6.dp),
+                )
             }
             Spacer(Modifier.weight(1f))
-            Text(title, style = Type.Display.copy(fontSize = 52.sp), color = Color.White)
-            Spacer(Modifier.height(6.dp))
+            Text(title, style = Type.Display.copy(fontSize = 60.sp, lineHeight = 72.sp), color = Color.White)
+            Spacer(Modifier.height(8.dp))
             Text(subtitle, style = Type.Body, color = Color.White.copy(alpha = 0.85f))
-            Spacer(Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(6.dp, 28.dp).clip(RoundedCornerShape(3.dp)).background(Color.White))
-                Spacer(Modifier.width(12.dp))
-                Text(accent, style = Type.Label, color = Color.White)
-            }
         }
         Waveform(level = 0.65f, modifier = Modifier.align(Alignment.TopEnd), color = Color.White.copy(alpha = 0.7f), maxHeight = 96.dp, barWidth = 12.dp, gap = 9.dp)
     }

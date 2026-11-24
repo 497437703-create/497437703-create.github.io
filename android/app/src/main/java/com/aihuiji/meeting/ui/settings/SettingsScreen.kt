@@ -219,7 +219,6 @@ private fun ProfileEditor(profile: ServerProfile, active: Boolean) {
             Spacer(Modifier.width(16.dp))
             BigSwitch(profile.demoBackend, { save(profile.copy(demoBackend = it, baseUrl = url.trim())) })
             Spacer(Modifier.weight(1f))
-            result?.let { Text(it, style = Type.Caption); Spacer(Modifier.width(16.dp)) }
             PrimaryButton(stringResource(R.string.profile_test), {
                 val p = profile.copy(baseUrl = url.trim())
                 save(p)
@@ -233,6 +232,8 @@ private fun ProfileEditor(profile: ServerProfile, active: Boolean) {
                 }
             }, height = 64.dp)
         }
+        if (url.trim().startsWith("http://")) Text(stringResource(R.string.profile_cleartext), style = Type.Caption, color = Palette.Warning)
+        result?.let { Text(it, style = Type.Caption) }
     }
 }
 

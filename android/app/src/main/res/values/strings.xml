@@ -294,6 +294,7 @@
     <string name="profile_token_hint">访问令牌（加密保存在本机）</string>
     <string name="profile_token_saved">令牌已保存，输入新值可替换</string>
     <string name="profile_demo">演示服务</string>
+    <string name="profile_cleartext">未加密连接（http），仅建议在企业内网使用</string>
     <string name="profile_test">测试连接</string>
     <string name="test_ok">连接成功</string>
     <string name="test_failed">连接失败</string>

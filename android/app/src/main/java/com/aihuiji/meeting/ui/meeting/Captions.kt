@@ -37,7 +37,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -126,29 +126,25 @@ fun CaptionList(
     val state = rememberLazyListState()
     val scope = rememberCoroutineScope()
     var following by remember { mutableStateOf(true) }
-    val atBottom by remember {
-        derivedStateOf {
-            val info = state.layoutInfo
-            val last = info.visibleItemsInfo.lastOrNull()
-            last == null || (last.index >= info.totalItemsCount - 1 && last.offset + last.size <= info.viewportEndOffset + 8)
-        }
-    }
+    // reverseLayout: index 0 is the newest caption, anchored to the bottom edge, so a growing
+    // partial pushes older lines up without any scroll arithmetic.
+    val atBottom by remember { derivedStateOf { state.firstVisibleItemIndex == 0 && state.firstVisibleItemScrollOffset < 8 } }
+    // Only a finger drag pauses auto-follow; our own animateScrollToItem must not.
     LaunchedEffect(state) {
-        snapshotFlow { state.isScrollInProgress }.collectLatest { scrolling ->
-            if (scrolling) {
-                following = false
-            } else if (!following) {
-                if (atBottom) following = true else {
-                    delay(5_000)
+        state.interactionSource.interactions.collectLatest { interaction ->
+            when (interaction) {
+                is DragInteraction.Start -> following = false
+                is DragInteraction.Stop, is DragInteraction.Cancel -> {
+                    if (!atBottom) delay(5_000)
                     following = true
                 }
             }
         }
     }
-    val lastText = segments.lastOrNull()?.let { it.text.length + it.translations.size * 1000 }
-    LaunchedEffect(segments.size, lastText, following) {
-        if (following && segments.isNotEmpty()) state.animateScrollToItem(segments.lastIndex, Int.MAX_VALUE / 2)
+    LaunchedEffect(segments.size, following) {
+        if (following && segments.isNotEmpty()) state.animateScrollToItem(0)
     }
+    val newestFirst = remember(segments) { segments.asReversed() }
 
     Box(modifier) {
         if (segments.isEmpty()) {
@@ -158,9 +154,10 @@ fun CaptionList(
             state = state,
             modifier = Modifier.fillMaxSize(),
             contentPadding = contentPadding,
-            verticalArrangement = Arrangement.spacedBy(if (style.wide) 32.dp else 22.dp),
+            reverseLayout = true,
+            verticalArrangement = Arrangement.spacedBy(if (style.wide) 32.dp else 22.dp, Alignment.Bottom),
         ) {
-            items(segments, key = { it.id }) { seg ->
+            items(newestFirst, key = { it.id }) { seg ->
                 CaptionBlock(
                     segment = seg,
                     speaker = speakers[seg.speakerId],
@@ -183,7 +180,7 @@ fun CaptionList(
                 icon = Icons.Outlined.ArrowDownward,
                 onClick = {
                     following = true
-                    scope.launch { if (segments.isNotEmpty()) state.animateScrollToItem(segments.lastIndex) }
+                    scope.launch { if (segments.isNotEmpty()) state.animateScrollToItem(0) }
                 },
             )
         }
