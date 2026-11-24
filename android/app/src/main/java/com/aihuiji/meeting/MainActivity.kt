@@ -3,7 +3,7 @@ package com.aihuiji.meeting
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.provider.Settings
+import android.content.Context
 import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -24,57 +24,59 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.aihuiji.meeting.core.model.MeetingState
 import com.aihuiji.meeting.ui.history.HistoryScreen
-import com.aihuiji.meeting.ui.home.HomeScreen
-import com.aihuiji.meeting.ui.meeting.LiveMeetingScreen
 import com.aihuiji.meeting.ui.meeting.RawPointer
 import com.aihuiji.meeting.ui.onboarding.PermissionsScreen
-import com.aihuiji.meeting.ui.onboarding.SplashScreen
 import com.aihuiji.meeting.ui.settings.SettingsScreen
 import com.aihuiji.meeting.ui.summary.GeneratingScreen
 import com.aihuiji.meeting.ui.summary.SummaryScreen
 import com.aihuiji.meeting.ui.theme.AiHuijiTheme
 
 sealed interface Route {
-    data object Splash : Route
     data object Permissions : Route
-    data object Home : Route
-    data object Live : Route
-    data class Generating(val id: String) : Route
-    data class Summary(val id: String) : Route
     data object History : Route
     data object Settings : Route
+    data class Generating(val id: String) : Route
+    data class Summary(val id: String) : Route
 }
 
+/**
+ * The full-size app: saved meetings, minutes and settings. It is never shown on launch; the floating
+ * window opens it only when the user asks for records, settings or the finished minutes.
+ */
 class MainActivity : ComponentActivity() {
-    private val stack: SnapshotStateList<Route> = mutableStateListOf(Route.Splash)
+    private val stack: SnapshotStateList<Route> = mutableStateListOf(Route.History)
     private var pendingDeepLink by mutableStateOf<Uri?>(null)
-    private var overlayGranted by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         immersive()
-        pendingDeepLink = intent?.data
-        overlayGranted = Settings.canDrawOverlays(this)
-        if (savedInstanceState != null) stack.apply { clear(); add(Route.Home) }
+        if (savedInstanceState == null) applyIntent(intent)
         setContent { AiHuijiTheme { AppNav() } }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        pendingDeepLink = intent.data
+        applyIntent(intent)
+    }
+
+    private fun applyIntent(intent: Intent?) {
+        pendingDeepLink = intent?.data
+        stack.clear()
+        stack.add(Route.History)
+        val id = intent?.getStringExtra(EXTRA_ID)
+        when (intent?.getStringExtra(EXTRA_ROUTE)) {
+            ROUTE_SETTINGS -> stack.add(Route.Settings)
+            ROUTE_SUMMARY -> if (id != null) {
+                stack.add(if (container.repository.get(id)?.summary != null) Route.Summary(id) else Route.Generating(id))
+            }
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) immersive()
-    }
-
-    override fun onResume() {
-        super.onResume()
-        overlayGranted = Settings.canDrawOverlays(this)
     }
 
     /** Palm rejection for large boards: drop very large contact areas (forearm/palm resting on glass). */
@@ -101,35 +103,14 @@ class MainActivity : ComponentActivity() {
         stack.add(r)
     }
 
-    private fun home() {
-        stack.clear()
-        stack.add(Route.Home)
+    private fun openRecord(id: String) {
+        push(if (container.repository.get(id)?.summary != null) Route.Summary(id) else Route.Generating(id))
     }
 
     @Composable
     private fun AppNav() {
-        val controller = container.meetingController
-        val live by controller.live.collectAsStateWithLifecycle()
-        val generation by controller.generation.collectAsStateWithLifecycle()
-        val settings by container.settings.settings.collectAsStateWithLifecycle()
-
-        val running = live != null
-        val ending = live?.record?.state == MeetingState.ENDING
-        val generationId = generation?.meetingId
-        LaunchedEffect(running, ending, overlayGranted, generationId) {
-            val topRoute = stack.lastOrNull()
-            when {
-                ending && generationId != null ->
-                    if (topRoute == Route.Live) replaceTop(Route.Generating(generationId))
-                    else if (topRoute !is Route.Generating) push(Route.Generating(generationId))
-                running && !overlayGranted -> push(Route.Live)
-                running && topRoute == Route.Live -> stack.removeAt(stack.lastIndex)
-                !running && topRoute == Route.Live -> if (generationId != null) replaceTop(Route.Generating(generationId)) else home()
-            }
-        }
-        LaunchedEffect(pendingDeepLink, stack.firstOrNull()) {
+        LaunchedEffect(pendingDeepLink) {
             val uri = pendingDeepLink ?: return@LaunchedEffect
-            if (stack.firstOrNull() == Route.Splash) return@LaunchedEffect
             pendingDeepLink = null
             val arg = uri.pathSegments.firstOrNull() ?: return@LaunchedEffect
             when (uri.host) {
@@ -138,38 +119,38 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        val top = stack.lastOrNull() ?: Route.Home
-        BackHandler(enabled = stack.size > 1 && top != Route.Live) { stack.removeAt(stack.lastIndex) }
+        val top = stack.lastOrNull() ?: Route.History
+        BackHandler(enabled = stack.size > 1) { stack.removeAt(stack.lastIndex) }
 
         AnimatedContent(top, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "nav") { route ->
             when (route) {
-                Route.Splash -> SplashScreen {
-                    stack.clear()
-                    stack.add(Route.Home)
-                    if (!settings.onboardingDone) stack.add(Route.Permissions)
-                }
-                Route.Permissions -> PermissionsScreen(onDone = { stack.removeAt(stack.lastIndex) })
-                Route.Home -> HomeScreen(
-                    onOpenMeeting = { id ->
-                        val rec = container.repository.get(id)
-                        push(if (rec?.summary != null) Route.Summary(id) else Route.Generating(id))
-                    },
-                    onHistory = { push(Route.History) },
-                    onSettings = { push(Route.Settings) },
-                    onOpenLive = { push(Route.Live) },
-                )
-                Route.Live -> LiveMeetingScreen(onMinimize = { if (stack.lastOrNull() == Route.Live) stack.removeAt(stack.lastIndex) })
-                is Route.Generating -> GeneratingScreen(route.id, onDone = { replaceTop(Route.Summary(route.id)) }, onHome = ::home)
-                is Route.Summary -> SummaryScreen(route.id, onBack = { if (stack.size > 1) stack.removeAt(stack.lastIndex) else home() })
                 Route.History -> HistoryScreen(
-                    onOpen = { id ->
-                        val rec = container.repository.get(id)
-                        push(if (rec?.summary != null) Route.Summary(id) else Route.Generating(id))
-                    },
-                    onBack = { stack.removeAt(stack.lastIndex) },
+                    onOpen = ::openRecord,
+                    onSettings = { push(Route.Settings) },
+                    onBack = { finish() },
                 )
+                Route.Permissions -> PermissionsScreen(onDone = { stack.removeAt(stack.lastIndex) })
+                is Route.Generating -> GeneratingScreen(route.id, onDone = { replaceTop(Route.Summary(route.id)) }, onHome = { finish() })
+                is Route.Summary -> SummaryScreen(route.id, onBack = { if (stack.size > 1) stack.removeAt(stack.lastIndex) else finish() })
                 Route.Settings -> SettingsScreen(onBack = { stack.removeAt(stack.lastIndex) }, onPermissions = { push(Route.Permissions) })
             }
+        }
+    }
+
+    companion object {
+        private const val EXTRA_ROUTE = "route"
+        private const val EXTRA_ID = "id"
+        const val ROUTE_HISTORY = "history"
+        const val ROUTE_SETTINGS = "settings"
+        const val ROUTE_SUMMARY = "summary"
+
+        fun open(context: Context, route: String, id: String? = null) {
+            context.startActivity(
+                Intent(context, MainActivity::class.java)
+                    .putExtra(EXTRA_ROUTE, route)
+                    .putExtra(EXTRA_ID, id)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            )
         }
     }
 }

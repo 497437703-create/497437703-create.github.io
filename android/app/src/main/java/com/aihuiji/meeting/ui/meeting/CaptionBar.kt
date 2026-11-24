@@ -116,7 +116,7 @@ class BarActions(
     val wantKeyboard: (Boolean) -> Unit,
 )
 
-private enum class BarMenu { LANGUAGE, FONT }
+internal enum class BarMenu { LANGUAGE, FONT }
 
 @Composable
 fun CaptionBarContent(model: LiveUiModel, actions: BarActions, chrome: BarChrome, modifier: Modifier = Modifier) {
@@ -270,7 +270,7 @@ private fun BarStatus(model: LiveUiModel, showLabel: Boolean) {
 }
 
 @Composable
-private fun BarIcon(icon: ImageVector, description: String, onClick: () -> Unit, selected: Boolean = false, tint: Color = Palette.Text1) {
+internal fun BarIcon(icon: ImageVector, description: String, onClick: () -> Unit, selected: Boolean = false, tint: Color = Palette.Text1) {
     Box(
         Modifier
             .size(60.dp)
@@ -284,7 +284,7 @@ private fun BarIcon(icon: ImageVector, description: String, onClick: () -> Unit,
 }
 
 @Composable
-private fun BarPill(
+internal fun BarPill(
     icon: ImageVector,
     text: String?,
     onClick: () -> Unit,
@@ -316,7 +316,7 @@ private fun BarPill(
 }
 
 @Composable
-private fun BarDivider() {
+internal fun BarDivider() {
     Box(Modifier.padding(horizontal = 8.dp).width(1.dp).height(32.dp).background(Palette.Stroke))
 }
 
@@ -462,7 +462,7 @@ private fun FontMenu(model: LiveUiModel) {
 // ------------------------------------------------------------------ resize grips
 
 @Composable
-private fun ResizeGrips(chrome: BarChrome) {
+internal fun ResizeGrips(chrome: BarChrome) {
     val e = chrome.edges
     val l = e and EDGE_L != 0
     val t = e and EDGE_T != 0

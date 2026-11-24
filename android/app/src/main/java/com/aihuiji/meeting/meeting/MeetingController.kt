@@ -30,7 +30,6 @@ import com.aihuiji.meeting.core.provider.ProviderLocation
 import com.aihuiji.meeting.core.provider.demo.DemoAsrSession
 import com.aihuiji.meeting.data.MeetingRepository
 import com.aihuiji.meeting.data.SettingsStore
-import com.aihuiji.meeting.service.CaptionBarService
 import com.aihuiji.meeting.service.MeetingForegroundService
 import com.aihuiji.meeting.service.ProjectionConsent
 import kotlinx.coroutines.CoroutineScope
@@ -64,8 +63,6 @@ data class LiveMeeting(
     val activeSpeakerId: String? = null,
     val mic: MicStatus? = null,
     val far: FarStatus = FarStatus.NOT_NEEDED,
-    /** The caption bar is collapsed to the floating icon. */
-    val barMinimized: Boolean = false,
     val translationEnabled: Boolean = config.translationEnabled,
     val targetLangs: List<Lang> = config.targetLangs,
     val location: ProviderLocation = ProviderLocation.DEMO,
@@ -90,6 +87,10 @@ class MeetingController(
 
     private val _live = MutableStateFlow<LiveMeeting?>(null)
     val live: StateFlow<LiveMeeting?> = _live.asStateFlow()
+
+    private val _barMinimized = MutableStateFlow(false)
+    /** The floating window is collapsed to the animated icon (idle or during a meeting). */
+    val barMinimized: StateFlow<Boolean> = _barMinimized.asStateFlow()
 
     private val _generation = MutableStateFlow<Generation?>(null)
     val generation: StateFlow<Generation?> = _generation.asStateFlow()
@@ -155,7 +156,6 @@ class MeetingController(
         scope.launch { repository.save(record) }
 
         MeetingForegroundService.start(context, micGranted = mic !is MicStatus.NoPermission, consent = projectionConsent)
-        CaptionBarService.show(context)
 
         val channels = if (wantsFar) setOf(Channel.LOCAL, Channel.REMOTE) else setOf(Channel.LOCAL)
         if (config.recordOnly) {
@@ -224,7 +224,7 @@ class MeetingController(
     }
 
     fun setBarMinimized(minimized: Boolean) {
-        _live.update { it?.copy(barMinimized = minimized) }
+        _barMinimized.value = minimized
     }
 
     fun setTranslation(enabled: Boolean, targets: List<Lang>) {
@@ -251,14 +251,12 @@ class MeetingController(
         )
         _generation.value = Generation(ending.id, 0f)
         _live.update { it?.copy(record = ending) }
-        CaptionBarService.hide(context)
         scope.launch {
             asr?.runCatching { finish() }
             val files = engine?.stop().orEmpty()
             asr?.close()
             jobs.forEach { it.cancel() }
             jobs.clear()
-            CaptionBarService.hide(context)
             MeetingForegroundService.stop(context)
             val latest = _live.value?.record ?: ending
             val finished = latest.copy(

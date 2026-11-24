@@ -51,11 +51,16 @@ val MinimizedIconSize = 176.dp
  * live audio level. Tap to expand, drag to move.
  */
 @Composable
-fun MinimizedIcon(model: LiveUiModel, chrome: BarChrome, onExpand: () -> Unit, modifier: Modifier = Modifier) {
-    val paused = model.live.isPaused
+fun MinimizedIcon(model: LiveUiModel?, chrome: BarChrome, onExpand: () -> Unit, modifier: Modifier = Modifier) {
+    val recording = model != null
+    val paused = model?.live?.isPaused == true
     val reduce = LocalUiPrefs.current.reduceMotion
     val animated = !paused && !reduce
-    val level by animateFloatAsState(if (paused) 0f else model.level(), tween(140), label = "iconLevel")
+    val level by animateFloatAsState(
+        if (paused) 0f else model?.level() ?: 0.12f,
+        tween(140),
+        label = "iconLevel",
+    )
     val t = rememberInfiniteTransition(label = "icon")
     val phase by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1800, easing = LinearEasing)), label = "phase")
     val blink by t.animateFloat(1f, 0.25f, infiniteRepeatable(tween(800), RepeatMode.Reverse), label = "blink")
@@ -101,7 +106,7 @@ fun MinimizedIcon(model: LiveUiModel, chrome: BarChrome, onExpand: () -> Unit, m
         }
         BrandLogo(size = 100.dp)
 
-        Box(
+        if (recording) Box(
             Modifier.align(Alignment.TopStart).offset(112.dp, 36.dp).size(30.dp).clip(CircleShape)
                 .background(Palette.Bg0).border(2.dp, Palette.Stroke, CircleShape),
             contentAlignment = Alignment.Center,
@@ -112,7 +117,7 @@ fun MinimizedIcon(model: LiveUiModel, chrome: BarChrome, onExpand: () -> Unit, m
                 Box(Modifier.size(14.dp).clip(CircleShape).alpha(if (animated) blink else 1f).background(Palette.Danger))
             }
         }
-        Box(
+        if (model != null) Box(
             Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 14.dp)

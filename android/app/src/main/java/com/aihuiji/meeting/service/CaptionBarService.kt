@@ -3,6 +3,8 @@ package com.aihuiji.meeting.service
 import android.animation.ValueAnimator
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.view.MotionEvent
@@ -29,7 +31,9 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.aihuiji.meeting.LauncherActivity
 import com.aihuiji.meeting.MainActivity
+import com.aihuiji.meeting.R
 import com.aihuiji.meeting.container
 import com.aihuiji.meeting.core.model.BarBounds
 import com.aihuiji.meeting.core.model.IconPos
@@ -37,7 +41,10 @@ import com.aihuiji.meeting.meeting.MicStatus
 import com.aihuiji.meeting.ui.meeting.BarActions
 import com.aihuiji.meeting.ui.meeting.BarChrome
 import com.aihuiji.meeting.ui.meeting.CaptionBarContent
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aihuiji.meeting.ui.meeting.EDGE_ALL
+import com.aihuiji.meeting.ui.meeting.IdleActions
+import com.aihuiji.meeting.ui.meeting.IdleBarContent
 import com.aihuiji.meeting.ui.meeting.EDGE_B
 import com.aihuiji.meeting.ui.meeting.EDGE_L
 import com.aihuiji.meeting.ui.meeting.EDGE_R
@@ -95,14 +102,24 @@ class CaptionBarService : LifecycleService(), SavedStateRegistryOwner {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
-        if (barView == null) {
-            if (controller.live.value == null || !Settings.canDrawOverlays(this)) {
-                stopSelf()
+        if (!Settings.canDrawOverlays(this)) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        startInForeground()
+        if (barView == null) attach() else controller.setBarMinimized(false)
+        return START_NOT_STICKY
+    }
+
+    private fun startInForeground() {
+        val notification = MeetingForegroundService.buildNotification(this, R.string.notif_window)
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
             } else {
-                attach()
+                startForeground(NOTIFICATION_ID, notification)
             }
         }
-        return START_NOT_STICKY
     }
 
     // ---------------------------------------------------------------- window
@@ -114,7 +131,7 @@ class CaptionBarService : LifecycleService(), SavedStateRegistryOwner {
         screenH = bounds.height()
 
         restoreRects()
-        minimized = controller.live.value?.barMinimized == true
+        minimized = controller.barMinimized.value
         val start = if (minimized) iconRect else barRect
         params = WindowManager.LayoutParams(
             start.width(),
@@ -135,9 +152,7 @@ class CaptionBarService : LifecycleService(), SavedStateRegistryOwner {
         barView = view
 
         lifecycleScope.launch {
-            controller.live.collect { live ->
-                if (live == null) stopSelf() else applyMinimized(live.barMinimized)
-            }
+            controller.barMinimized.collect { applyMinimized(it) }
         }
         lifecycleScope.launch {
             combine(controller.live, snapshotFlow { dialog }, snapshotFlow { micDismissed }) { live, d, dismissed ->
@@ -304,13 +319,6 @@ class CaptionBarService : LifecycleService(), SavedStateRegistryOwner {
         runCatching { wm.updateViewLayout(view, params) }
     }
 
-    private fun openApp() {
-        startActivity(
-            Intent(this, MainActivity::class.java)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT),
-        )
-    }
-
     // ---------------------------------------------------------------- content
 
     private val chrome = BarChrome(
@@ -334,6 +342,17 @@ class CaptionBarService : LifecycleService(), SavedStateRegistryOwner {
         },
     )
 
+    private val idleActions by lazy {
+        IdleActions(
+            start = { LauncherActivity.requestStart(this, settingsStore.value.remoteAudio) },
+            openRecords = { MainActivity.open(this, MainActivity.ROUTE_HISTORY) },
+            openSettings = { MainActivity.open(this, MainActivity.ROUTE_SETTINGS) },
+            openMinutes = { MainActivity.open(this, MainActivity.ROUTE_SUMMARY, it) },
+            minimize = { controller.setBarMinimized(true) },
+            close = { stopSelf() },
+        )
+    }
+
     private val actions by lazy {
         BarActions(
             minimize = { controller.setBarMinimized(true) },
@@ -347,12 +366,13 @@ class CaptionBarService : LifecycleService(), SavedStateRegistryOwner {
 
     @Composable
     private fun BarRoot() {
-        val model = rememberLiveUiModel() ?: return
-        Crossfade(targetState = model.live.barMinimized, animationSpec = tween(220), label = "bar") { mini ->
-            if (mini) {
-                MinimizedIcon(model, chrome, onExpand = { controller.setBarMinimized(false) })
-            } else {
-                CaptionBarContent(model, actions, chrome)
+        val model = rememberLiveUiModel()
+        val mini by controller.barMinimized.collectAsStateWithLifecycle()
+        Crossfade(targetState = mini, animationSpec = tween(220), label = "bar") { isMini ->
+            when {
+                isMini -> MinimizedIcon(model, chrome, onExpand = { controller.setBarMinimized(false) })
+                model != null -> CaptionBarContent(model, actions, chrome)
+                else -> IdleBarContent(idleActions, chrome)
             }
         }
     }
@@ -361,7 +381,7 @@ class CaptionBarService : LifecycleService(), SavedStateRegistryOwner {
     private fun DialogRoot() {
         val model = rememberLiveUiModel() ?: return
         Box(Modifier.fillMaxSize()) {
-            LiveDialogs(model, dialog, onOverlay = { dialog = it }, onEnded = ::openApp)
+            LiveDialogs(model, dialog, onOverlay = { dialog = it })
             val mic = model.live.mic
             MicAlert(model, dismissed = mic == micDismissed, onDismiss = { micDismissed = mic })
         }
@@ -373,6 +393,7 @@ class CaptionBarService : LifecycleService(), SavedStateRegistryOwner {
         barView?.let { runCatching { wm.removeView(it) } }
         dialogView = null
         barView = null
+        stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()
     }
 
@@ -380,12 +401,13 @@ class CaptionBarService : LifecycleService(), SavedStateRegistryOwner {
         private const val MIN_W_DP = 900
         private const val MIN_H_DP = 260
         private const val DEFAULT_W_DP = 1660
-        private const val DEFAULT_H_DP = 400
+        private const val DEFAULT_H_DP = 360
+        private const val NOTIFICATION_ID = 1002
         private const val MAX_H_FRACTION = 0.85f
         private const val BAR_RING_DP = 24
 
         fun show(context: Context) {
-            if (Settings.canDrawOverlays(context)) context.startService(Intent(context, CaptionBarService::class.java))
+            if (Settings.canDrawOverlays(context)) context.startForegroundService(Intent(context, CaptionBarService::class.java))
         }
 
         fun hide(context: Context) {

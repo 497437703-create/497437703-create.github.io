@@ -22,7 +22,14 @@ Install on the board (developer mode / USB debugging):
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-The first launch shows the permission guide (S22). Out of the box both server profiles use the
+Launching the app draws nothing full screen: whatever was on the display stays visible and the
+floating caption window appears on top of it (no permission guide, self-check or wizard on launch).
+If "display over other apps" is not yet allowed, Android's own settings page for it opens once;
+the window shows as soon as it is granted. Microphone and screen-audio capture are asked with
+Android's system dialogs only when a meeting is started. Records, minutes and settings open the
+full app only when tapped from the floating window.
+
+Out of the box both server profiles use the
 built-in **demo backend**: a scripted 5-language project meeting with captions, translation,
 speakers and minutes. No server is needed for a walkthrough.
 
@@ -30,19 +37,19 @@ speakers and minutes. No server is needed for a walkthrough.
 
 | Area | Where |
 |---|---|
-| One start button for room and video meetings (a 视频会议 switch in the start sheet picks the mode) | `ui/home/HomeScreen.kt`, `ui/home/StartFlow.kt` |
+| Launch goes straight to the floating window (idle state with one start button + 视频会议 switch); invisible entry activity handles overlay/mic/capture system prompts | `LauncherActivity.kt`, `ui/meeting/IdleBar.kt`, `service/CaptionBarService.kt` |
 | Caption bar: docked at the bottom of the display (default 1660x400 dp), resizable from every edge/corner, bounds remembered; toolbar with pause / mark / notes / language / font / hide-original / more / minimize / end | `service/CaptionBarService.kt`, `ui/meeting/CaptionBar.kt` |
 | Minimize collapses the bar into an animated floating icon (brand logo, level-reactive ticks, timer); tap to restore | `ui/meeting/MinimizedIcon.kt` |
-| Video meeting: the conferencing app opens full screen and the caption bar floats above it (needs the "display over other apps" permission; without it the bar stays inside this app) | `vc/VcLauncher.kt`, `service/CaptionBarService.kt`, `ui/meeting/LiveMeetingScreen.kt` |
+| Video meeting: the conferencing app opens full screen and the caption bar floats above it (the floating window is the primary UI and needs the "display over other apps" permission) | `vc/VcLauncher.kt`, `service/CaptionBarService.kt` |
 | USB omni-mic capture, AEC/NS, far-end capture via MediaProjection playback capture | `audio/AudioCaptureEngine.kt`, `audio/AudioDevices.kt` |
-| Pre-meeting sheet, self-check, capture consent (S03/S16b) | `ui/home/StartFlow.kt` |
+| Device self-check (on demand from the records screen only), capture consent via Android's dialog | `ui/home/StartFlow.kt`, `LauncherActivity.kt` |
 | Speaker labels, speed notes (mark/excerpt/tags), notes drawer | `ui/meeting/Captions.kt`, `ui/meeting/LiveSheets.kt` |
 | Offline spool and backfill, link banner | `core/provider/remote/FrameSpool.kt` |
 | Minutes with 7 templates, each item traceable to its transcript lines (S08/S10/S19) | `ui/summary/*`, `core/provider/minutes/` |
 | Share link + QR, deep links `aihuiji://summary/{id}`, `aihuiji://meeting/{code}` | `ui/meeting/LiveSheets.kt`, `MainActivity.kt` |
 | Export PDF / Markdown / TXT | `export/Exporter.kt` |
 | Settings behind a 4–6 digit admin PIN; server profiles, tokens in Android Keystore | `ui/settings/SettingsScreen.kt`, `data/TokenVault.kt` |
-| 180-day retention, 20 meetings cached on the device, crash recovery | `data/MeetingRepository.kt`, `ui/home/HomeScreen.kt` |
+| 180-day retention, 20 meetings cached on the device, crash recovery | `data/MeetingRepository.kt`, `ui/history/HistoryScreen.kt` |
 | Languages zh/en/fr/de/ja | `core/model/Models.kt` (`Lang`) |
 
 ## Providers

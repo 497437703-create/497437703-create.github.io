@@ -342,7 +342,14 @@
     <string name="bar_font_l">大字号</string>
     <string name="bar_font_xl">特大字号</string>
     <string name="action_minimize">最小化</string>
-    <string name="fallback_title">字幕条显示在本应用内</string>
-    <string name="fallback_body">授予「显示在其他应用上层」权限后，字幕条可悬浮在腾讯会议等应用之上，并可自由移动、缩放与最小化为悬浮图标。</string>
-    <string name="fallback_back_home">返回主页</string>
+    <string name="idle_ready">就绪</string>
+    <string name="idle_hint">点一下开始记录，字幕会浮在当前画面上，不会遮住其他应用</string>
+    <string name="idle_records">会议记录</string>
+    <string name="idle_close">关闭悬浮窗</string>
+    <string name="idle_generating">纪要生成中 %1$d%%</string>
+    <string name="idle_generated">纪要已生成</string>
+    <string name="idle_failed">纪要生成失败，可在会议记录中重试</string>
+    <string name="idle_view_minutes">查看纪要</string>
+    <string name="idle_video_on">视频会议 · 同时记录远端声音</string>
+    <string name="notif_window">悬浮字幕窗口运行中</string>
 </resources>

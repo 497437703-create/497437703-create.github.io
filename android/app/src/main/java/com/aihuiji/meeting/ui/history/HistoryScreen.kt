@@ -18,6 +18,15 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.outlined.FactCheck
+import androidx.compose.material.icons.outlined.Settings
+import com.aihuiji.meeting.core.model.MeetingMode
+import com.aihuiji.meeting.ui.components.ToolAction
+import com.aihuiji.meeting.ui.home.RecoveryBanner
+import com.aihuiji.meeting.ui.home.SelfCheckOverlay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -33,10 +42,14 @@ import com.aihuiji.meeting.ui.theme.Type
 
 /** S11 history grid (cross-meeting search arrives in M2). */
 @Composable
-fun HistoryScreen(onOpen: (String) -> Unit, onBack: () -> Unit) {
+fun HistoryScreen(onOpen: (String) -> Unit, onSettings: () -> Unit, onBack: () -> Unit) {
     val container = LocalContext.current.container
     val meetings by container.repository.meetings.collectAsStateWithLifecycle()
     val settings by container.settings.settings.collectAsStateWithLifecycle()
+    var selfCheck by remember { mutableStateOf(false) }
+    var dismissedRecovery by remember { mutableStateOf(false) }
+    val unfinished = remember(meetings) { container.repository.unfinished(container.meetingController.live.value?.record?.id) }
+    Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().background(Palette.Bg0).padding(48.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconCircleButton(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.action_back), onBack, size = 80.dp)
@@ -44,6 +57,17 @@ fun HistoryScreen(onOpen: (String) -> Unit, onBack: () -> Unit) {
             Text(stringResource(R.string.history_title), style = Type.TitleL)
             Spacer(Modifier.weight(1f))
             Text(stringResource(R.string.history_retention, settings.retentionDays, settings.localCacheLimit), style = Type.Caption)
+            Spacer(Modifier.width(24.dp))
+            ToolAction(Icons.Outlined.FactCheck, stringResource(R.string.action_self_check), { selfCheck = true })
+            Spacer(Modifier.width(16.dp))
+            ToolAction(Icons.Outlined.Settings, stringResource(R.string.action_settings), onSettings)
+        }
+        if (unfinished.isNotEmpty() && !dismissedRecovery) {
+            Spacer(Modifier.height(24.dp))
+            RecoveryBanner(unfinished.first(), onRecover = {
+                container.meetingController.recover(it.id)
+                onOpen(it.id)
+            }, onDismiss = { dismissedRecovery = true })
         }
         Spacer(Modifier.height(32.dp))
         if (meetings.isEmpty()) {
@@ -59,5 +83,9 @@ fun HistoryScreen(onOpen: (String) -> Unit, onBack: () -> Unit) {
                 items(meetings, key = { it.id }) { m -> MeetingCard(m) { onOpen(m.id) } }
             }
         }
+    }
+    if (selfCheck) {
+        SelfCheckOverlay(mode = MeetingMode.VIDEO, standalone = true, onProceed = { selfCheck = false }, onCancel = { selfCheck = false })
+    }
     }
 }

@@ -11,6 +11,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Only granted when preinstalled as a privileged app; lets far-end capture include VoIP playback. -->
     <uses-permission
@@ -43,6 +44,21 @@
         tools:targetApi="34">
 
         <activity
+            android:name=".LauncherActivity"
+            android:exported="true"
+            android:theme="@style/Theme.AiHuiji.Transparent"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:screenOrientation="sensorLandscape"
+            tools:ignore="DiscouragedApi,LockedOrientationActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
             android:name=".MainActivity"
             android:exported="true"
             android:screenOrientation="sensorLandscape"
@@ -51,10 +67,6 @@
             android:resizeableActivity="true"
             android:windowSoftInputMode="adjustResize"
             tools:ignore="DiscouragedApi,LockedOrientationActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -76,7 +88,12 @@
 
         <service
             android:name=".service.CaptionBarService"
-            android:exported="false" />
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="floating_caption_overlay" />
+        </service>
 
         <provider
             android:name="androidx.core.content.FileProvider"
