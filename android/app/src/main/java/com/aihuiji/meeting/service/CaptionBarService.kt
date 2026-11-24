@@ -348,6 +348,7 @@ class CaptionBarService : LifecycleService(), SavedStateRegistryOwner {
             openRecords = { MainActivity.open(this, MainActivity.ROUTE_HISTORY) },
             openSettings = { MainActivity.open(this, MainActivity.ROUTE_SETTINGS) },
             openMinutes = { MainActivity.open(this, MainActivity.ROUTE_SUMMARY, it) },
+            takeAway = { MainActivity.open(this, MainActivity.ROUTE_SUMMARY, it, offerTakeaway = true) },
             minimize = { controller.setBarMinimized(true) },
             close = { stopSelf() },
         )

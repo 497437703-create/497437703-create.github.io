@@ -39,6 +39,7 @@ import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.GpsFixed
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.SaveAlt
 import androidx.compose.material.icons.outlined.Send
 import androidx.compose.material.icons.outlined.TextSnippet
 import androidx.compose.material3.Icon
@@ -98,11 +99,12 @@ private sealed interface SummaryOverlay {
     data object Template : SummaryOverlay
     data object Distribute : SummaryOverlay
     data object Export : SummaryOverlay
+    data object PostMeeting : SummaryOverlay
 }
 
 /** S18 summary workspace (S10 content, S10b transcript, S18a template, S18b trace, S18c distribute). */
 @Composable
-fun SummaryScreen(meetingId: String, onBack: () -> Unit) {
+fun SummaryScreen(meetingId: String, onBack: () -> Unit, offerTakeaway: Boolean = false) {
     val ctx = LocalContext.current
     val container = ctx.container
     val meetings by container.repository.meetings.collectAsStateWithLifecycle()
@@ -122,7 +124,7 @@ fun SummaryScreen(meetingId: String, onBack: () -> Unit) {
     DisposableEffect(player) { onDispose { player.release() } }
 
     var tab by remember { mutableStateOf(SummaryTab.SUMMARY) }
-    var overlay by remember { mutableStateOf<SummaryOverlay?>(null) }
+    var overlay by remember { mutableStateOf<SummaryOverlay?>(if (offerTakeaway) SummaryOverlay.PostMeeting else null) }
     var focusSegment by remember { mutableStateOf<String?>(null) }
     val regenerating = generation?.takeIf { it.meetingId == meetingId && !it.done && it.error == null }
 
@@ -136,7 +138,7 @@ fun SummaryScreen(meetingId: String, onBack: () -> Unit) {
 
     Box(Modifier.fillMaxSize().background(Palette.Bg0)) {
         Column(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 32.dp)) {
-            SummaryTopBar(record, onBack, onTemplate = { overlay = SummaryOverlay.Template }, onDistribute = { overlay = SummaryOverlay.Distribute }, onExport = { overlay = SummaryOverlay.Export })
+            SummaryTopBar(record, onBack, onTemplate = { overlay = SummaryOverlay.Template }, onTakeAway = { overlay = SummaryOverlay.PostMeeting }, onDistribute = { overlay = SummaryOverlay.Distribute }, onExport = { overlay = SummaryOverlay.Export })
             Spacer(Modifier.height(20.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
                 SummaryTab.entries.forEach { t ->
@@ -184,6 +186,12 @@ fun SummaryScreen(meetingId: String, onBack: () -> Unit) {
                     onClose = { overlay = null },
                 )
             }
+            SummaryOverlay.PostMeeting -> PostMeetingSheet(
+                record,
+                onShareLink = { overlay = SummaryOverlay.Distribute },
+                onExport = { overlay = SummaryOverlay.Export },
+                onClose = { overlay = null },
+            )
             SummaryOverlay.Export -> ExportMenu(onPick = { format ->
                 val file = container.exporter.export(record, format)
                 ctx.startActivity(container.exporter.shareIntent(file, format))
@@ -203,7 +211,7 @@ private fun tabLabel(t: SummaryTab) = when (t) {
 }
 
 @Composable
-private fun SummaryTopBar(record: MeetingRecord, onBack: () -> Unit, onTemplate: () -> Unit, onDistribute: () -> Unit, onExport: () -> Unit) {
+private fun SummaryTopBar(record: MeetingRecord, onBack: () -> Unit, onTemplate: () -> Unit, onTakeAway: () -> Unit, onDistribute: () -> Unit, onExport: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         IconCircleButton(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.action_back), onBack, size = 80.dp)
         Spacer(Modifier.width(24.dp))
@@ -231,6 +239,8 @@ private fun SummaryTopBar(record: MeetingRecord, onBack: () -> Unit, onTemplate:
             Spacer(Modifier.width(8.dp))
             Icon(Icons.Outlined.ExpandMore, null, tint = Palette.Text2)
         }
+        Spacer(Modifier.width(16.dp))
+        ToolAction(Icons.Outlined.SaveAlt, stringResource(R.string.action_take_away), onTakeAway)
         Spacer(Modifier.width(16.dp))
         ToolAction(Icons.Outlined.Send, stringResource(R.string.action_distribute), onDistribute)
         Spacer(Modifier.width(16.dp))

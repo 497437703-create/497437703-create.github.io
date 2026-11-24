@@ -24,6 +24,9 @@ enum class ExportFormat(val ext: String, val mime: String) {
     TEXT("txt", "text/plain"),
 }
 
+fun exportBaseName(code: String, startedAtEpochMs: Long): String =
+    "$code-${SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date(startedAtEpochMs))}"
+
 /** F-13 M1 exports: PDF + plain text / Markdown, shared through the system share sheet. */
 class Exporter(private val context: Context) {
     private val dir get() = File(context.filesDir, "exports").apply { mkdirs() }
@@ -77,7 +80,7 @@ class Exporter(private val context: Context) {
         markdown(record).lines().joinToString("\n") { it.removePrefix("## ").removePrefix("# ").replace("**", "").trimEnd() }
 
     fun export(record: MeetingRecord, format: ExportFormat): File {
-        val base = "${record.code}-${fileDate.format(Date(record.startedAtEpochMs))}"
+        val base = exportBaseName(record.code, record.startedAtEpochMs)
         val file = File(dir, "$base.${format.ext}")
         when (format) {
             ExportFormat.MARKDOWN -> file.writeText(markdown(record))
@@ -136,6 +139,5 @@ class Exporter(private val context: Context) {
 
     private companion object {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.CHINA)
-        val fileDate = SimpleDateFormat("yyyyMMdd-HHmm", Locale.US)
     }
 }

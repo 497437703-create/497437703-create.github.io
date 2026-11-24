@@ -29,6 +29,8 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.Remove
+import androidx.compose.material.icons.outlined.QrCode2
+import androidx.compose.material.icons.outlined.SaveAlt
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.TextFields
 import androidx.compose.material.icons.outlined.Translate
@@ -69,6 +71,7 @@ class IdleActions(
     val openRecords: () -> Unit,
     val openSettings: () -> Unit,
     val openMinutes: (String) -> Unit,
+    val takeAway: (String) -> Unit,
     val minimize: () -> Unit,
     val close: () -> Unit,
 )
@@ -107,6 +110,7 @@ fun IdleBarContent(actions: IdleActions, chrome: BarChrome, modifier: Modifier =
                     generation = generation?.takeIf { it.meetingId != seenMinutes },
                     onStart = actions.start,
                     onMinutes = { id -> seenMinutes = id; actions.openMinutes(id) },
+                    onTakeAway = { id -> seenMinutes = id; actions.takeAway(id) },
                     onRecords = actions.openRecords,
                 )
                 if (menu != null) {
@@ -209,6 +213,7 @@ private fun IdleBody(
     generation: com.aihuiji.meeting.meeting.Generation?,
     onStart: () -> Unit,
     onMinutes: (String) -> Unit,
+    onTakeAway: (String) -> Unit,
     onRecords: () -> Unit,
 ) {
     Box(Modifier.fillMaxSize().padding(horizontal = 32.dp), contentAlignment = Alignment.Center) {
@@ -237,6 +242,8 @@ private fun IdleBody(
                         }
                         generation.done -> {
                             Text(stringResource(R.string.idle_generated), style = Type.Label, color = Palette.Success)
+                            PrimaryButton(stringResource(R.string.idle_save_local), { onTakeAway(generation.meetingId) }, icon = Icons.Outlined.SaveAlt, height = 64.dp)
+                            PrimaryButton(stringResource(R.string.idle_take_qr), { onTakeAway(generation.meetingId) }, icon = Icons.Outlined.QrCode2, height = 64.dp)
                             SecondaryButton(stringResource(R.string.idle_view_minutes), { onMinutes(generation.meetingId) }, height = 64.dp)
                         }
                         else -> Text(

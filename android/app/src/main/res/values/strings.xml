@@ -352,4 +352,21 @@
     <string name="idle_view_minutes">查看纪要</string>
     <string name="idle_video_on">视频会议 · 同时记录远端声音</string>
     <string name="notif_window">悬浮字幕窗口运行中</string>
+    <string name="post_title">纪要已生成，选择带走方式</string>
+    <string name="post_hint">可以两种都用；之后随时点右上角“带走”再次打开</string>
+    <string name="post_save_title">保存到本机</string>
+    <string name="post_save_hint">PDF、Markdown、TXT 三种格式一并保存到文件夹</string>
+    <string name="post_save_to">保存位置：%1$s</string>
+    <string name="post_save_action">保存到这里</string>
+    <string name="post_saving">正在保存…</string>
+    <string name="post_choose_folder">选择其他文件夹…</string>
+    <string name="post_saved">已保存 %1$d 个文件到 %2$s</string>
+    <string name="post_save_failed">保存失败：%1$s</string>
+    <string name="post_qr_title">扫码带走</string>
+    <string name="post_qr_hint">用手机扫一扫，在手机上查看会议纪要</string>
+    <string name="post_more">更多方式</string>
+    <string name="post_later">稍后再说</string>
+    <string name="action_take_away">带走</string>
+    <string name="idle_save_local">保存到本机</string>
+    <string name="idle_take_qr">二维码带走</string>
 </resources>
