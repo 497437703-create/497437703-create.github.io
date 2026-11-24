@@ -37,7 +37,7 @@ sealed interface Route {
     data object History : Route
     data object Settings : Route
     data class Generating(val id: String) : Route
-    data class Summary(val id: String, val offer: Boolean = false) : Route
+    data class Summary(val id: String) : Route
 }
 
 /**
@@ -69,10 +69,7 @@ class MainActivity : ComponentActivity() {
         when (intent?.getStringExtra(EXTRA_ROUTE)) {
             ROUTE_SETTINGS -> stack.add(Route.Settings)
             ROUTE_SUMMARY -> if (id != null) {
-                stack.add(
-                    if (container.repository.get(id)?.summary != null) Route.Summary(id, offer = intent.getBooleanExtra(EXTRA_OFFER, false))
-                    else Route.Generating(id),
-                )
+                stack.add(if (container.repository.get(id)?.summary != null) Route.Summary(id) else Route.Generating(id))
             }
         }
     }
@@ -133,8 +130,8 @@ class MainActivity : ComponentActivity() {
                     onBack = { finish() },
                 )
                 Route.Permissions -> PermissionsScreen(onDone = { stack.removeAt(stack.lastIndex) })
-                is Route.Generating -> GeneratingScreen(route.id, onDone = { replaceTop(Route.Summary(route.id, offer = true)) }, onHome = { finish() })
-                is Route.Summary -> SummaryScreen(route.id, offerTakeaway = route.offer, onBack = { if (stack.size > 1) stack.removeAt(stack.lastIndex) else finish() })
+                is Route.Generating -> GeneratingScreen(route.id, onDone = { replaceTop(Route.Summary(route.id)) }, onHome = { finish() })
+                is Route.Summary -> SummaryScreen(route.id, onBack = { if (stack.size > 1) stack.removeAt(stack.lastIndex) else finish() })
                 Route.Settings -> SettingsScreen(onBack = { stack.removeAt(stack.lastIndex) }, onPermissions = { push(Route.Permissions) })
             }
         }
@@ -143,17 +140,15 @@ class MainActivity : ComponentActivity() {
     companion object {
         private const val EXTRA_ROUTE = "route"
         private const val EXTRA_ID = "id"
-        private const val EXTRA_OFFER = "offer"
         const val ROUTE_HISTORY = "history"
         const val ROUTE_SETTINGS = "settings"
         const val ROUTE_SUMMARY = "summary"
 
-        fun open(context: Context, route: String, id: String? = null, offerTakeaway: Boolean = false) {
+        fun open(context: Context, route: String, id: String? = null) {
             context.startActivity(
                 Intent(context, MainActivity::class.java)
                     .putExtra(EXTRA_ROUTE, route)
                     .putExtra(EXTRA_ID, id)
-                    .putExtra(EXTRA_OFFER, offerTakeaway)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             )
         }

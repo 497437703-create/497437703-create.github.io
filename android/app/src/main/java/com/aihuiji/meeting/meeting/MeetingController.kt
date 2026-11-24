@@ -3,6 +3,7 @@ package com.aihuiji.meeting.meeting
 import android.content.Context
 import android.media.projection.MediaProjection
 import android.os.SystemClock
+import com.aihuiji.meeting.TakeawayActivity
 import com.aihuiji.meeting.audio.AudioCaptureEngine
 import com.aihuiji.meeting.audio.CaptureStart
 import com.aihuiji.meeting.core.model.Channel
@@ -91,6 +92,10 @@ class MeetingController(
     private val _barMinimized = MutableStateFlow(false)
     /** The floating window is collapsed to the animated icon (idle or during a meeting). */
     val barMinimized: StateFlow<Boolean> = _barMinimized.asStateFlow()
+
+    private val _barSuppressed = MutableStateFlow(false)
+    /** The floating window steps aside completely while a full dialog (post-meeting choice) is on screen. */
+    val barSuppressed: StateFlow<Boolean> = _barSuppressed.asStateFlow()
 
     private val _generation = MutableStateFlow<Generation?>(null)
     val generation: StateFlow<Generation?> = _generation.asStateFlow()
@@ -223,6 +228,10 @@ class MeetingController(
         _live.update { it?.copy(record = next) }
     }
 
+    fun setBarSuppressed(suppressed: Boolean) {
+        _barSuppressed.value = suppressed
+    }
+
     fun setBarMinimized(minimized: Boolean) {
         _barMinimized.value = minimized
     }
@@ -272,7 +281,7 @@ class MeetingController(
                 _generation.value = Generation(finished.id, 0f, error = RECORD_ONLY)
             } else {
                 repository.save(finished)
-                generate(finished.id, finished.templateId)
+                generate(finished.id, finished.templateId, announce = true)
             }
         }
         return ending.id
@@ -292,7 +301,7 @@ class MeetingController(
         scope.launch {
             val durationMs = rec.durationMs.takeIf { it > 0 } ?: (rec.segments.maxOfOrNull { it.endMs } ?: 0)
             repository.save(rec.copy(state = MeetingState.GENERATING, durationMs = durationMs, segments = rec.finalSegments))
-            generate(id, rec.templateId)
+            generate(id, rec.templateId, announce = true)
         }
     }
 
@@ -300,7 +309,7 @@ class MeetingController(
         scope.launch { generate(id, templateId) }
     }
 
-    private suspend fun generate(id: String, templateId: String) {
+    private suspend fun generate(id: String, templateId: String, announce: Boolean = false) {
         val rec = repository.get(id) ?: return
         _generation.value = Generation(id, 0f)
         val b = bundleFor(rec.profileId)
@@ -322,6 +331,7 @@ class MeetingController(
                 ),
             )
             _generation.value = Generation(id, 1f, done = true)
+            if (announce) TakeawayActivity.open(context, id)
         } catch (e: Exception) {
             repository.save(rec.copy(state = MeetingState.FAILED, failureReason = e.message ?: e.javaClass.simpleName))
             _generation.value = Generation(id, 0f, error = e.message ?: e.javaClass.simpleName)

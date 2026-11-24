@@ -6,6 +6,18 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.outlined.Close
+import com.aihuiji.meeting.ui.components.IconCircleButton
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -65,6 +77,7 @@ import java.util.Locale
  * Shown once the minutes are ready: take them away by saving to a folder on this display, or by scanning
  * a QR code. The existing share link and PDF / Markdown / TXT export stay one tap away at the bottom.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PostMeetingSheet(record: MeetingRecord, onShareLink: () -> Unit, onExport: () -> Unit, onClose: () -> Unit) {
     val ctx = LocalContext.current
@@ -100,15 +113,28 @@ fun PostMeetingSheet(record: MeetingRecord, onShareLink: () -> Unit, onExport: (
 
     val share = record.share
     val shape = RoundedCornerShape(32.dp)
-    Box(Modifier.fillMaxSize().background(Palette.Bg0.copy(alpha = 0.7f)).pressable(onClick = onClose), contentAlignment = Alignment.Center) {
+    BoxWithConstraints(
+        Modifier
+            .fillMaxSize()
+            .background(Palette.Bg0.copy(alpha = 0.72f))
+            .pressable(onClick = onClose)
+            .systemBarsPadding()
+            .padding(20.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        val wide = maxWidth >= 1000.dp
+        val pad = if (wide) 40.dp else 24.dp
         Column(
             Modifier
-                .width(1500.dp)
+                .widthIn(max = 1400.dp)
+                .fillMaxWidth()
+                .heightIn(max = maxHeight)
                 .clip(shape)
                 .background(Palette.Bg2)
                 .border(1.dp, Palette.Stroke, shape)
                 .pressable(onClick = {})
-                .padding(40.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(pad),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.CheckCircle, null, tint = Palette.Success, modifier = Modifier.size(56.dp))
@@ -117,10 +143,11 @@ fun PostMeetingSheet(record: MeetingRecord, onShareLink: () -> Unit, onExport: (
                     Text(stringResource(R.string.post_title), style = Type.TitleL)
                     Text(stringResource(R.string.post_hint), style = Type.Caption)
                 }
+                IconCircleButton(Icons.Outlined.Close, stringResource(R.string.action_close), onClose, size = 64.dp)
             }
-            Spacer(Modifier.height(28.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                ChoiceCard(Modifier.weight(1f), Icons.Outlined.SaveAlt, stringResource(R.string.post_save_title), stringResource(R.string.post_save_hint)) {
+            Spacer(Modifier.height(24.dp))
+            val saveCard: @Composable (Modifier) -> Unit = { m ->
+                ChoiceCard(m, Icons.Outlined.SaveAlt, stringResource(R.string.post_save_title), stringResource(R.string.post_save_hint)) {
                     Spacer(Modifier.height(20.dp))
                     Row(Modifier.fillMaxWidth().height(72.dp).clip(RoundedCornerShape(20.dp)).background(Palette.Bg0.copy(alpha = 0.6f)).padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Outlined.FolderOpen, null, tint = Palette.Brand400, modifier = Modifier.size(32.dp))
@@ -146,12 +173,14 @@ fun PostMeetingSheet(record: MeetingRecord, onShareLink: () -> Unit, onExport: (
                             style = Type.Label,
                             color = if (r.ok) Palette.Success else Palette.Warning,
                         )
-                        if (r.ok) Text(r.saved.joinToString("  ·  "), style = Type.Caption, maxLines = 3)
+                        if (r.ok) Text(r.saved.joinToString("  ·  "), style = Type.Caption)
                     }
                 }
-                ChoiceCard(Modifier.weight(1f), Icons.Outlined.QrCode2, stringResource(R.string.post_qr_title), stringResource(R.string.post_qr_hint)) {
+            }
+            val qrCard: @Composable (Modifier) -> Unit = { m ->
+                ChoiceCard(m, Icons.Outlined.QrCode2, stringResource(R.string.post_qr_title), stringResource(R.string.post_qr_hint)) {
                     Spacer(Modifier.height(20.dp))
-                    Box(Modifier.align(Alignment.CenterHorizontally).size(300.dp).clip(RoundedCornerShape(24.dp)).background(Palette.Text1).padding(14.dp)) {
+                    Box(Modifier.align(Alignment.CenterHorizontally).size(280.dp).clip(RoundedCornerShape(24.dp)).background(Palette.Text1).padding(14.dp)) {
                         QrImage(share?.url ?: "aihuiji://summary/${record.id}", Modifier.fillMaxSize())
                     }
                     Spacer(Modifier.height(14.dp))
@@ -170,9 +199,21 @@ fun PostMeetingSheet(record: MeetingRecord, onShareLink: () -> Unit, onExport: (
                     }
                 }
             }
-            Spacer(Modifier.height(28.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(stringResource(R.string.post_more), style = Type.Caption, modifier = Modifier.weight(1f))
+            if (wide) {
+                Row(Modifier.height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+                    saveCard(Modifier.weight(1f).fillMaxHeight())
+                    qrCard(Modifier.weight(1f).fillMaxHeight())
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                    saveCard(Modifier.fillMaxWidth())
+                    qrCard(Modifier.fillMaxWidth())
+                }
+            }
+            Spacer(Modifier.height(24.dp))
+            Text(stringResource(R.string.post_more), style = Type.Caption)
+            Spacer(Modifier.height(10.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 SecondaryButton(stringResource(R.string.action_distribute), onShareLink, height = 72.dp)
                 SecondaryButton(stringResource(R.string.action_export), onExport, height = 72.dp)
                 SecondaryButton(stringResource(R.string.post_later), onClose, height = 72.dp)
@@ -190,7 +231,7 @@ private fun ChoiceCard(
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
     val shape = RoundedCornerShape(28.dp)
-    Column(modifier.height(620.dp).clip(shape).background(Palette.Bg0.copy(alpha = 0.55f)).border(1.dp, Palette.Stroke, shape).padding(32.dp)) {
+    Column(modifier.clip(shape).background(Palette.Bg0.copy(alpha = 0.55f)).border(1.dp, Palette.Stroke, shape).padding(32.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, null, tint = Palette.Brand400, modifier = Modifier.size(48.dp))
             Spacer(Modifier.width(16.dp))

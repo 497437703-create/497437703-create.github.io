@@ -63,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aihuiji.meeting.R
+import com.aihuiji.meeting.TakeawayActivity
 import com.aihuiji.meeting.audio.MeetingPlayer
 import com.aihuiji.meeting.container
 import com.aihuiji.meeting.core.model.CardType
@@ -99,12 +100,11 @@ private sealed interface SummaryOverlay {
     data object Template : SummaryOverlay
     data object Distribute : SummaryOverlay
     data object Export : SummaryOverlay
-    data object PostMeeting : SummaryOverlay
 }
 
 /** S18 summary workspace (S10 content, S10b transcript, S18a template, S18b trace, S18c distribute). */
 @Composable
-fun SummaryScreen(meetingId: String, onBack: () -> Unit, offerTakeaway: Boolean = false) {
+fun SummaryScreen(meetingId: String, onBack: () -> Unit) {
     val ctx = LocalContext.current
     val container = ctx.container
     val meetings by container.repository.meetings.collectAsStateWithLifecycle()
@@ -124,7 +124,7 @@ fun SummaryScreen(meetingId: String, onBack: () -> Unit, offerTakeaway: Boolean 
     DisposableEffect(player) { onDispose { player.release() } }
 
     var tab by remember { mutableStateOf(SummaryTab.SUMMARY) }
-    var overlay by remember { mutableStateOf<SummaryOverlay?>(if (offerTakeaway) SummaryOverlay.PostMeeting else null) }
+    var overlay by remember { mutableStateOf<SummaryOverlay?>(null) }
     var focusSegment by remember { mutableStateOf<String?>(null) }
     val regenerating = generation?.takeIf { it.meetingId == meetingId && !it.done && it.error == null }
 
@@ -138,7 +138,7 @@ fun SummaryScreen(meetingId: String, onBack: () -> Unit, offerTakeaway: Boolean 
 
     Box(Modifier.fillMaxSize().background(Palette.Bg0)) {
         Column(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 32.dp)) {
-            SummaryTopBar(record, onBack, onTemplate = { overlay = SummaryOverlay.Template }, onTakeAway = { overlay = SummaryOverlay.PostMeeting }, onDistribute = { overlay = SummaryOverlay.Distribute }, onExport = { overlay = SummaryOverlay.Export })
+            SummaryTopBar(record, onBack, onTemplate = { overlay = SummaryOverlay.Template }, onTakeAway = { TakeawayActivity.open(ctx, record.id) }, onDistribute = { overlay = SummaryOverlay.Distribute }, onExport = { overlay = SummaryOverlay.Export })
             Spacer(Modifier.height(20.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
                 SummaryTab.entries.forEach { t ->
@@ -186,12 +186,6 @@ fun SummaryScreen(meetingId: String, onBack: () -> Unit, offerTakeaway: Boolean 
                     onClose = { overlay = null },
                 )
             }
-            SummaryOverlay.PostMeeting -> PostMeetingSheet(
-                record,
-                onShareLink = { overlay = SummaryOverlay.Distribute },
-                onExport = { overlay = SummaryOverlay.Export },
-                onClose = { overlay = null },
-            )
             SummaryOverlay.Export -> ExportMenu(onPick = { format ->
                 val file = container.exporter.export(record, format)
                 ctx.startActivity(container.exporter.shareIntent(file, format))
@@ -554,7 +548,7 @@ private fun TemplatePicker(current: String, onPick: (String) -> Unit, onClose: (
 }
 
 @Composable
-private fun ExportMenu(onPick: (ExportFormat) -> Unit, onClose: () -> Unit) {
+internal fun ExportMenu(onPick: (ExportFormat) -> Unit, onClose: () -> Unit) {
     Box(Modifier.fillMaxSize().background(Palette.Bg0.copy(alpha = 0.6f)).pressable(onClick = onClose), contentAlignment = Alignment.Center) {
         Column(Modifier.width(720.dp).clip(RoundedCornerShape(32.dp)).background(Palette.Bg2).pressable(onClick = {}).padding(40.dp)) {
             Text(stringResource(R.string.export_title), style = Type.TitleL)

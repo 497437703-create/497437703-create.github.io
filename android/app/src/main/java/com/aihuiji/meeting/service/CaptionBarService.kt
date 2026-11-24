@@ -11,6 +11,7 @@ import android.view.MotionEvent
 import android.widget.FrameLayout
 import android.provider.Settings
 import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
 import androidx.compose.animation.Crossfade
@@ -32,6 +33,7 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.aihuiji.meeting.LauncherActivity
+import com.aihuiji.meeting.TakeawayActivity
 import com.aihuiji.meeting.MainActivity
 import com.aihuiji.meeting.R
 import com.aihuiji.meeting.container
@@ -153,6 +155,13 @@ class CaptionBarService : LifecycleService(), SavedStateRegistryOwner {
 
         lifecycleScope.launch {
             controller.barMinimized.collect { applyMinimized(it) }
+        }
+        lifecycleScope.launch {
+            controller.barSuppressed.collect { hidden ->
+                val v = if (hidden) View.GONE else View.VISIBLE
+                barView?.visibility = v
+                dialogView?.visibility = v
+            }
         }
         lifecycleScope.launch {
             combine(controller.live, snapshotFlow { dialog }, snapshotFlow { micDismissed }) { live, d, dismissed ->
@@ -348,7 +357,7 @@ class CaptionBarService : LifecycleService(), SavedStateRegistryOwner {
             openRecords = { MainActivity.open(this, MainActivity.ROUTE_HISTORY) },
             openSettings = { MainActivity.open(this, MainActivity.ROUTE_SETTINGS) },
             openMinutes = { MainActivity.open(this, MainActivity.ROUTE_SUMMARY, it) },
-            takeAway = { MainActivity.open(this, MainActivity.ROUTE_SUMMARY, it, offerTakeaway = true) },
+            takeAway = { TakeawayActivity.open(this, it) },
             minimize = { controller.setBarMinimized(true) },
             close = { stopSelf() },
         )

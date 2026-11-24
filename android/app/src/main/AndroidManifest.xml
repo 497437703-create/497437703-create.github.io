@@ -59,6 +59,14 @@
         </activity>
 
         <activity
+            android:name=".TakeawayActivity"
+            android:exported="false"
+            android:theme="@style/Theme.AiHuiji.Transparent"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop" />
+
+        <activity
             android:name=".MainActivity"
             android:exported="true"
             android:screenOrientation="sensorLandscape"

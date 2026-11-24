@@ -48,7 +48,7 @@ speakers and minutes. No server is needed for a walkthrough.
 | Minutes with 7 templates, each item traceable to its transcript lines (S08/S10/S19) | `ui/summary/*`, `core/provider/minutes/` |
 | Share link + QR, deep links `aihuiji://summary/{id}`, `aihuiji://meeting/{code}` | `ui/meeting/LiveSheets.kt`, `MainActivity.kt` |
 | Export PDF / Markdown / TXT (unchanged) | `export/Exporter.kt` |
-| After the minutes are generated: choose to save PDF+MD+TXT to a folder on the display (Download/AI会记 by default, or any folder via the system folder picker, remembered) or take them away by QR code; share link and export stay one tap away. Also reachable from the floating window and the 带走 button on the minutes screen | `ui/summary/PostMeetingSheet.kt`, `export/MinutesSaver.kt` |
+| After the minutes are generated a stand-alone, scrollable dialog opens (the floating window hides while it is open): save PDF+MD+TXT to a folder on the display (Download/AI会记 by default, or any folder via the system folder picker, remembered) or take them away by QR code; share link and export stay one tap away. Also reachable from the floating window and the 带走 button on the minutes screen | `TakeawayActivity.kt`, `ui/summary/PostMeetingSheet.kt`, `export/MinutesSaver.kt` |
 | Settings behind a 4–6 digit admin PIN; server profiles, tokens in Android Keystore | `ui/settings/SettingsScreen.kt`, `data/TokenVault.kt` |
 | 180-day retention, 20 meetings cached on the device, crash recovery | `data/MeetingRepository.kt`, `ui/history/HistoryScreen.kt` |
 | Languages zh/en/fr/de/ja | `core/model/Models.kt` (`Lang`) |
