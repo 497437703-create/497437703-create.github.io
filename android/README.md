@@ -49,23 +49,108 @@ speakers and minutes. No server is needed for a walkthrough.
 | Share link + QR, deep links `aihuiji://summary/{id}`, `aihuiji://meeting/{code}` | `ui/meeting/LiveSheets.kt`, `MainActivity.kt` |
 | Export PDF / Markdown / TXT (unchanged) | `export/Exporter.kt` |
 | After the minutes are generated a stand-alone, scrollable dialog opens (the floating window hides while it is open): save PDF+MD+TXT to a folder on the display (Download/AI会记 by default, or any folder via the system folder picker, remembered) or take them away by QR code; share link and export stay one tap away. Also reachable from the floating window and the 带走 button on the minutes screen | `TakeawayActivity.kt`, `ui/summary/PostMeetingSheet.kt`, `export/MinutesSaver.kt` |
-| Settings behind a 4–6 digit admin PIN; server profiles, tokens in Android Keystore | `ui/settings/SettingsScreen.kt`, `data/TokenVault.kt` |
+| Settings behind a 4–6 digit admin PIN; AI backend choice (Hunyuan cloud or SCH-900S), credentials in Android Keystore | `ui/settings/SettingsScreen.kt`, `data/TokenVault.kt` |
 | 180-day retention, 20 meetings cached on the device, crash recovery | `data/MeetingRepository.kt`, `ui/history/HistoryScreen.kt` |
 | Languages zh/en/fr/de/ja | `core/model/Models.kt` (`Lang`) |
 
-## Providers
+## AI backends: Tencent Hunyuan cloud or on-prem SCH-900S
 
-All AI work goes through `core/provider/Providers.kt`: `AsrProvider`, `TranslationProvider`,
-`SpeakerProvider`, `MinutesProvider` and `ServerGateway`, bundled per `ServerProfile`
-(SCH-900S enterprise server or Lenovo cloud). `ProviderFactory` picks:
+Speech recognition, translation and minutes always use Tencent Hunyuan models. The user picks
+**where** they run in 设置 › AI 服务（腾讯混元）(behind the admin PIN), by tapping 设为当前 on one of
+two profiles. The choice applies from the next meeting; the idle floating window shows it
+("就绪 · SCH-900S" / "就绪 · 腾讯混元云", plus "（演示）" while the demo switch is on). Nothing is
+checked or blocked at launch.
 
-- **Demo** (`core/provider/demo/`) when the profile's demo switch is on or no URL is set.
-- **Remote** (`core/provider/remote/`) otherwise. The REST/WebSocket contract in
-  `RemoteContract.kt` is **provisional**. The real SCH-900S and Lenovo cloud APIs are not
-  published yet, so only the DTOs and `RemoteProviders.kt` should need to change once they are.
+| Profile | ASR | Translation | Minutes |
+|---|---|---|---|
+| 企业私有化 · SCH-900S (Lenovo SCH-900S + Intel Arc B70) | AI 会记 gateway WebSocket on the appliance (`/v1/asr/stream`), speaker resolve, share links | Hunyuan-MT via the appliance's OpenAI-compatible endpoint | Hunyuan-A13B-Instruct via the same endpoint |
+| 腾讯混元云 | Tencent Cloud real-time ASR (`wss://asr.cloud.tencent.com/asr/v2/<AppId>`, HMAC-SHA1 signed) | `hunyuan-translation` on `api.hunyuan.cloud.tencent.com/v1` | `hunyuan-turbos-latest` on the same API |
 
-Cloud fallback is off by default. Plain `http://` is allowed for on-premises appliances and
-Settings flags it as unencrypted.
+The meeting flow does not know which one is used. `ProviderFactory` turns the active
+`ServerProfile` into a `ProviderBundle` (`AsrProvider`, `TranslationProvider`, `SpeakerProvider`,
+`MinutesProvider`, `ServerGateway`, all in `core/provider/Providers.kt`); captions, translation,
+minutes, takeaway/QR and saving only talk to those interfaces.
+
+- `core/provider/hunyuan/HunyuanBackend.kt` builds both bundles.
+- `HunyuanChatClient.kt`: OpenAI-compatible `/chat/completions` client (cloud and on-prem).
+- `HunyuanPrompts.kt`: Hunyuan-MT translation prompt; minutes prompt and parser. The model gets
+  numbered transcript lines and returns JSON whose `refs` are mapped back to `SourceRef`s, so every
+  minutes item stays traceable to the transcript.
+- `TencentAsr.kt`: Tencent real-time ASR signer, one WebSocket per audio channel, offline spool
+  and backfill.
+- `remote/RemoteProviders.kt`: the SCH-900S gateway (health, ASR WebSocket, speakers, share).
+  This contract (`RemoteContract.kt`) is still **provisional** until the appliance API is
+  published.
+- `demo/`: scripted backend. It is used whenever a profile's 演示服务 switch is on (the default),
+  so walkthroughs, CI and unit tests need no server or keys.
+
+### Configure on-prem SCH-900S
+
+| Field | Example | Default when empty |
+|---|---|---|
+| 服务地址（含端口） | `https://sch900s.corp.local:8443` | required |
+| 语音识别 WebSocket 路径 | `/v1/asr/stream` | `/v1/asr/stream` |
+| 混元模型接口（OpenAI 兼容） | `http://sch900s.corp.local:8000/v1` (vLLM / TGI serving Hunyuan) | `<服务地址>/v1` |
+| 访问令牌 | sent as `Authorization: Bearer …` to the gateway and the model endpoint | none |
+| 翻译模型 / 纪要模型 | `Hunyuan-MT-7B` / `Hunyuan-A13B-Instruct` | as shown |
+| 超时 | 10 / 20 / 30 / 60 s (minutes generation gets 6× this) | 20 s |
+
+Then switch 演示服务 off and tap 测试连接: it checks gateway health and pings the model endpoint.
+
+### Configure Tencent Hunyuan cloud
+
+| Field | Where to get it | Stored in |
+|---|---|---|
+| AppId | Tencent Cloud console › 账号信息 | settings |
+| SecretId / SecretKey | 访问管理 › API 密钥 (needs ASR permission) | Android Keystore vault |
+| 混元 API Key | 混元大模型 › API Key 管理 (OpenAI-compatible endpoint) | Android Keystore vault |
+| API 地址 | — | `https://api.hunyuan.cloud.tencent.com/v1` |
+| ASR 引擎 | `16k_zh_large`, `16k_zh`, … (other languages use `16k_<lang>`, auto-detect uses `16k_zh_en`) | `16k_zh_large` |
+| 翻译模型 / 纪要模型 | — | `hunyuan-translation` / `hunyuan-turbos-latest` |
+| 分享服务地址（可选） | an AI 会记 share service for short links | empty: the QR carries the on-device link |
+
+Secrets are typed into password fields, written to `TokenVault` (AES-GCM key in Android
+Keystore) on Done, and never shown again or stored in settings. No key ships in the APK.
+Settings saved by older builds with a `LENOVO_CLOUD` profile load as the Hunyuan cloud profile.
+
+### Errors
+
+Every backend reports failures as `ProviderException` (`core/provider/ProviderError.kt`):
+`NOT_CONFIGURED`, `UNREACHABLE`, `AUTH`, `QUOTA`, `TIMEOUT`, `SERVER`, `BAD_RESPONSE`.
+`ProviderErrorText` turns them into one Chinese sentence naming the backend, the service and
+the field to fix, for example "无法连接 SCH-900S（…）：请检查服务地址、端口和企业网络" or
+"腾讯云凭证无效，请检查 AppId / SecretId / SecretKey / 混元 API Key". They show in the caption bar
+(red banner above the captions), the minutes failure screen, 测试连接 and the device check.
+Credential, quota and missing-configuration errors stop reconnect attempts; network drops keep
+spooling audio and backfill once the link is back.
+
+### Try it without hardware or keys
+
+`tools/mock_hunyuan_server.py` (Python 3, standard library only) stands in for an SCH-900S:
+gateway health, scripted streaming ASR, an OpenAI-compatible Hunyuan endpoint for translation and
+minutes, speakers and share links. A wrong token returns 401.
+
+```bash
+python3 tools/mock_hunyuan_server.py --port 8090 --token demo-token
+# Emulator: 服务地址 http://10.0.2.2:8090, 访问令牌 demo-token, 演示服务 off, 测试连接
+```
+
+`HunyuanBackendTest` covers both backends against MockWebServer (prompt and model, Bearer
+header, 401 → AUTH, closed port → UNREACHABLE, slow server → TIMEOUT, Tencent ASR signing,
+streaming and 4002 rejection, minutes JSON → traceable minutes).
+
+### Limits
+
+- Hunyuan cloud ASR has no voiceprint service: speakers are the stream's own labels per channel
+  (local mic / far end); names can still be set by hand.
+- Very long meetings are trimmed in the middle to about 60k characters before summarising; pick a
+  long-context model for meetings over about 3 hours.
+- 允许回退到腾讯混元云 (off by default) only acts when a meeting starts: if the selected SCH-900S
+  does not answer its health check within 3 s and the cloud profile is configured with its demo
+  switch off, that meeting runs on the cloud and the caption bar says so. It does not move a
+  running meeting.
+
+Plain `http://` is allowed for on-premises appliances and Settings flags it as unencrypted.
 
 ## Items to verify on a real G1
 

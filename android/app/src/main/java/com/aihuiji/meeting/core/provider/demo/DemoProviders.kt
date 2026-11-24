@@ -12,6 +12,7 @@ import com.aihuiji.meeting.core.provider.AsrProvider
 import com.aihuiji.meeting.core.provider.AsrSession
 import com.aihuiji.meeting.core.provider.AsrSessionConfig
 import com.aihuiji.meeting.core.provider.AudioFrame
+import com.aihuiji.meeting.core.provider.BackendKind
 import com.aihuiji.meeting.core.provider.HealthResult
 import com.aihuiji.meeting.core.provider.MinutesProvider
 import com.aihuiji.meeting.core.provider.MinutesRequest
@@ -39,10 +40,11 @@ import kotlinx.coroutines.launch
 import java.util.UUID
 import kotlin.random.Random
 
-/** Ready-to-run backend for demos and UI work while SCH-900S / Lenovo cloud contracts are pending. */
+/** Offline backend for demos, CI and UI work without SCH-900S or Hunyuan cloud keys. */
 object DemoBackend {
     fun bundle(shareHost: String): ProviderBundle = ProviderBundle(
         location = ProviderLocation.DEMO,
+        backend = BackendKind.DEMO,
         gateway = DemoGateway,
         asr = DemoAsrProvider(),
         translation = DemoTranslationProvider(),

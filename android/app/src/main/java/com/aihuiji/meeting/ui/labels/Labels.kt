@@ -115,7 +115,7 @@ object Labels {
     @StringRes
     fun profile(kind: ProfileKind): Int = when (kind) {
         ProfileKind.ENTERPRISE -> R.string.profile_enterprise
-        ProfileKind.LENOVO_CLOUD -> R.string.profile_lenovo
+        ProfileKind.HUNYUAN_CLOUD -> R.string.profile_hunyuan_cloud
     }
 
     @StringRes

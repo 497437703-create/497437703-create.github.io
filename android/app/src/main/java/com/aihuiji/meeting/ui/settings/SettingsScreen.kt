@@ -27,6 +27,9 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,6 +42,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aihuiji.meeting.BuildConfig
@@ -49,6 +53,8 @@ import com.aihuiji.meeting.core.model.Lang
 import com.aihuiji.meeting.core.model.BarBounds
 import com.aihuiji.meeting.core.model.IconPos
 import com.aihuiji.meeting.core.model.ScreenSizeClass
+import com.aihuiji.meeting.core.model.HunyuanDefaults
+import com.aihuiji.meeting.core.model.SecretSlot
 import com.aihuiji.meeting.core.model.ServerProfile
 import com.aihuiji.meeting.core.model.Templates
 import com.aihuiji.meeting.core.model.TranslationDisplay
@@ -63,9 +69,11 @@ import com.aihuiji.meeting.ui.components.StatusPill
 import com.aihuiji.meeting.ui.components.glass
 import com.aihuiji.meeting.ui.components.pressable
 import com.aihuiji.meeting.ui.labels.Labels
+import com.aihuiji.meeting.ui.labels.ProviderErrorText
 import com.aihuiji.meeting.ui.theme.Palette
 import com.aihuiji.meeting.ui.theme.Type
 import com.aihuiji.meeting.vc.VcLauncher
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** S13 settings, behind the admin PIN (§9.4). */
@@ -108,7 +116,8 @@ private fun SettingsContent(onBack: () -> Unit, onPermissions: () -> Unit) {
         Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(24.dp)) {
                 Section(stringResource(R.string.settings_server)) {
-                    s.profiles.forEach { p -> ProfileEditor(p, active = p.id == s.activeProfileId) }
+                    Text(stringResource(R.string.settings_server_hint), style = Type.Caption)
+                    s.profiles.sortedBy { it.kind }.forEach { p -> key(p.id) { ProfileEditor(p, active = p.id == s.activeProfileId) } }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(stringResource(R.string.settings_fallback), style = Type.Label)
@@ -191,12 +200,13 @@ private fun ProfileEditor(profile: ServerProfile, active: Boolean) {
     val ctx = LocalContext.current
     val container = ctx.container
     val scope = rememberCoroutineScope()
-    var url by remember(profile.id) { mutableStateOf(profile.baseUrl) }
-    var token by remember(profile.id) { mutableStateOf("") }
     var result by remember { mutableStateOf<String?>(null) }
+    var testing by remember { mutableStateOf(false) }
     val okText = stringResource(R.string.test_ok)
     val failText = stringResource(R.string.test_failed)
-    fun save(p: ServerProfile) = container.settings.update { s -> s.copy(profiles = s.profiles.map { if (it.id == p.id) p else it }) }
+    fun save(edit: (ServerProfile) -> ServerProfile) = container.settings.update { s ->
+        s.copy(profiles = s.profiles.map { if (it.id == profile.id) edit(it) else it })
+    }
 
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(if (active) Palette.Brand700.copy(alpha = 0.18f) else Palette.Bg1)
@@ -204,41 +214,116 @@ private fun ProfileEditor(profile: ServerProfile, active: Boolean) {
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(Labels.profile(profile.kind)), style = Type.TitleM)
-            Spacer(Modifier.width(16.dp))
-            if (active) StatusPill(stringResource(R.string.profile_active), Palette.Success)
-            Spacer(Modifier.weight(1f))
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(Labels.profile(profile.kind)), style = Type.TitleM)
+                    Spacer(Modifier.width(16.dp))
+                    if (active) StatusPill(stringResource(R.string.profile_active), Palette.Success)
+                }
+                Text(
+                    stringResource(if (profile.isCloud) R.string.profile_hunyuan_cloud_desc else R.string.profile_enterprise_desc),
+                    style = Type.Caption,
+                )
+            }
             if (!active) SecondaryButton(stringResource(R.string.profile_use), { container.settings.update { it.copy(activeProfileId = profile.id) } }, height = 64.dp)
         }
-        TextInput(url, { url = it }, stringResource(R.string.profile_url_hint), onDone = { save(profile.copy(baseUrl = url.trim())) })
-        TextInput(token, { token = it }, stringResource(if (container.tokens.has(profile.id)) R.string.profile_token_saved else R.string.profile_token_hint), secret = true, onDone = {
-            container.tokens.put(profile.id, token); token = ""
-        })
+        if (profile.isCloud) {
+            ConfigField(stringResource(R.string.field_app_id), profile.appId, "1250000000") { v -> save { it.copy(appId = v.trim()) } }
+            SecretField(stringResource(R.string.field_secret_id), profile.id, SecretSlot.SECRET_ID)
+            SecretField(stringResource(R.string.field_secret_key), profile.id, SecretSlot.SECRET_KEY)
+            SecretField(stringResource(R.string.field_api_key), profile.id, SecretSlot.API_KEY)
+            ConfigField(stringResource(R.string.field_llm_url_cloud), profile.llmBaseUrl, stringResource(R.string.default_hint, HunyuanDefaults.CLOUD_LLM_BASE)) { v -> save { it.copy(llmBaseUrl = v.trim()) } }
+            ConfigField(stringResource(R.string.field_asr_engine), profile.asrEngine, stringResource(R.string.default_hint, HunyuanDefaults.CLOUD_ASR_ENGINE_ZH)) { v -> save { it.copy(asrEngine = v.trim()) } }
+        } else {
+            ConfigField(stringResource(R.string.field_onprem_url), profile.baseUrl, stringResource(R.string.field_onprem_url_hint)) { v -> save { it.copy(baseUrl = v.trim()) } }
+            ConfigField(stringResource(R.string.field_asr_path), profile.asrPath, stringResource(R.string.default_hint, HunyuanDefaults.ONPREM_ASR_PATH)) { v -> save { it.copy(asrPath = v.trim()) } }
+            ConfigField(stringResource(R.string.field_llm_url_onprem), profile.llmBaseUrl, stringResource(R.string.field_llm_url_onprem_hint)) { v -> save { it.copy(llmBaseUrl = v.trim()) } }
+            SecretField(stringResource(R.string.field_token), profile.id, SecretSlot.TOKEN)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            ConfigField(
+                stringResource(R.string.field_translation_model),
+                profile.translationModel,
+                stringResource(R.string.default_hint, if (profile.isCloud) HunyuanDefaults.CLOUD_TRANSLATION_MODEL else HunyuanDefaults.ONPREM_TRANSLATION_MODEL),
+                Modifier.weight(1f),
+            ) { v -> save { it.copy(translationModel = v.trim()) } }
+            ConfigField(
+                stringResource(R.string.field_summary_model),
+                profile.summaryModel,
+                stringResource(R.string.default_hint, if (profile.isCloud) HunyuanDefaults.CLOUD_SUMMARY_MODEL else HunyuanDefaults.ONPREM_SUMMARY_MODEL),
+                Modifier.weight(1f),
+            ) { v -> save { it.copy(summaryModel = v.trim()) } }
+        }
+        if (profile.isCloud) {
+            ConfigField(stringResource(R.string.field_share_url), profile.baseUrl, stringResource(R.string.field_onprem_url_hint)) { v -> save { it.copy(baseUrl = v.trim()) } }
+        }
+        Labeled(stringResource(R.string.field_timeout)) {
+            listOf(10, 20, 30, 60).forEach { sec -> Chip(stringResource(R.string.seconds, sec), profile.timeoutSec == sec, { save { it.copy(timeoutSec = sec) } }) }
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.profile_demo), style = Type.Label)
             Spacer(Modifier.width(16.dp))
-            BigSwitch(profile.demoBackend, { save(profile.copy(demoBackend = it, baseUrl = url.trim())) })
+            BigSwitch(profile.demoBackend, { v -> save { it.copy(demoBackend = v) } })
             Spacer(Modifier.weight(1f))
             PrimaryButton(stringResource(R.string.profile_test), {
-                val p = profile.copy(baseUrl = url.trim())
-                save(p)
-                if (token.isNotBlank()) { container.tokens.put(profile.id, token); token = "" }
+                if (testing) return@PrimaryButton
+                testing = true
+                result = null
                 scope.launch {
+                    val p = container.settings.value.profiles.first { it.id == profile.id }
                     result = when (val h = container.providers.create(p).gateway.health()) {
                         is HealthResult.Ok -> "$okText · ${h.latencyMs} ms · ${h.capabilities.modelVersion}"
-                        is HealthResult.Unavailable -> "$failText · ${h.reason}"
+                        is HealthResult.Unavailable -> "$failText · " + (h.error?.let { ProviderErrorText.describe(ctx, it) } ?: h.reason)
                         HealthResult.NotConfigured -> failText
                     }
+                    testing = false
                 }
-            }, height = 64.dp)
+            }, height = 64.dp, enabled = !testing)
         }
-        if (url.trim().startsWith("http://")) Text(stringResource(R.string.profile_cleartext), style = Type.Caption, color = Palette.Warning)
-        result?.let { Text(it, style = Type.Caption) }
+        val url = if (profile.isCloud) profile.baseUrl else profile.baseUrl.ifBlank { profile.llmBaseUrl }
+        if (url.startsWith("http://") || profile.llmBaseUrl.startsWith("http://")) {
+            Text(stringResource(R.string.profile_cleartext), style = Type.Caption, color = Palette.Warning)
+        }
+        result?.let { Text(it, style = Type.Caption, color = if (it.startsWith(okText)) Palette.Success else Palette.Warning) }
+    }
+}
+
+/** Plain setting (endpoint, model name, AppId) saved shortly after the user stops typing, or on Done. */
+@Composable
+private fun ConfigField(label: String, value: String, hint: String, modifier: Modifier = Modifier, onChange: (String) -> Unit) {
+    var text by remember { mutableStateOf(value) }
+    val commit by rememberUpdatedState(onChange)
+    LaunchedEffect(text) {
+        if (text.trim() == value) return@LaunchedEffect
+        delay(600)
+        commit(text)
+    }
+    Column(modifier) {
+        Text(label, style = Type.Caption)
+        Spacer(Modifier.height(6.dp))
+        TextInput(text, { text = it }, hint, showSave = false, onDone = { if (text.trim() != value) commit(text) })
+    }
+}
+
+/** Credential written to the Keystore-backed vault on save; never shown again or stored in settings. */
+@Composable
+private fun SecretField(label: String, profileId: String, slot: SecretSlot) {
+    val vault = LocalContext.current.container.tokens
+    var text by remember(profileId, slot) { mutableStateOf("") }
+    var saved by remember(profileId, slot) { mutableStateOf(vault.has(slot.key(profileId))) }
+    Column {
+        Text(label, style = Type.Caption)
+        Spacer(Modifier.height(6.dp))
+        TextInput(text, { text = it }, stringResource(if (saved) R.string.secret_saved else R.string.secret_unset), secret = true, onDone = {
+            vault.put(slot.key(profileId), text.trim())
+            saved = text.isNotBlank()
+            text = ""
+        })
     }
 }
 
 @Composable
-private fun TextInput(value: String, onChange: (String) -> Unit, hint: String, secret: Boolean = false, onDone: () -> Unit) {
+private fun TextInput(value: String, onChange: (String) -> Unit, hint: String, secret: Boolean = false, showSave: Boolean = true, onDone: () -> Unit) {
     Row(Modifier.fillMaxWidth().height(72.dp).glass(16.dp).padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
         BasicTextField(
             value = value,
@@ -251,11 +336,11 @@ private fun TextInput(value: String, onChange: (String) -> Unit, hint: String, s
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
             modifier = Modifier.weight(1f),
             decorationBox = { inner ->
-                if (value.isEmpty()) Text(hint, style = Type.Label, color = Palette.Text2)
+                if (value.isEmpty()) Text(hint, style = Type.Label, color = Palette.Text2, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 inner()
             },
         )
-        if (value.isNotEmpty()) {
+        if (showSave && value.isNotEmpty()) {
             Text(stringResource(R.string.action_save), style = Type.Label, color = Palette.Brand400, modifier = Modifier.pressable(onClick = onDone).padding(12.dp))
         }
     }

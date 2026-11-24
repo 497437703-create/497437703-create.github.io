@@ -11,6 +11,7 @@ import android.provider.Settings
 import com.aihuiji.meeting.audio.AudioDevices
 import com.aihuiji.meeting.core.provider.HealthResult
 import com.aihuiji.meeting.core.provider.ServerGateway
+import com.aihuiji.meeting.ui.labels.ProviderErrorText
 
 enum class CheckStatus { OK, WARN, ERROR }
 
@@ -58,7 +59,7 @@ class DeviceChecker(private val context: Context) {
 
     suspend fun server(gateway: ServerGateway): CheckResult = when (val h = gateway.health()) {
         is HealthResult.Ok -> CheckResult(CheckItem.SERVER, CheckStatus.OK, "${h.latencyMs} ms")
-        is HealthResult.Unavailable -> CheckResult(CheckItem.SERVER, CheckStatus.ERROR, h.reason)
+        is HealthResult.Unavailable -> CheckResult(CheckItem.SERVER, CheckStatus.ERROR, h.error?.let { ProviderErrorText.describe(context, it) } ?: h.reason)
         HealthResult.NotConfigured -> CheckResult(CheckItem.SERVER, CheckStatus.ERROR, "")
     }
 

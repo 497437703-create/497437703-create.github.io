@@ -3,6 +3,7 @@ package com.aihuiji.meeting.meeting
 import android.content.Context
 import android.media.projection.MediaProjection
 import android.os.SystemClock
+import com.aihuiji.meeting.R
 import com.aihuiji.meeting.TakeawayActivity
 import com.aihuiji.meeting.audio.AudioCaptureEngine
 import com.aihuiji.meeting.audio.CaptureStart
@@ -22,8 +23,11 @@ import com.aihuiji.meeting.core.model.Segment
 import com.aihuiji.meeting.core.model.Speaker
 import com.aihuiji.meeting.core.model.TimeRange
 import com.aihuiji.meeting.core.provider.AsrEvent
+import com.aihuiji.meeting.core.provider.AudioFrame
+import com.aihuiji.meeting.core.provider.BackendKind
 import com.aihuiji.meeting.core.provider.AsrSession
 import com.aihuiji.meeting.core.provider.AsrSessionConfig
+import com.aihuiji.meeting.core.provider.HealthResult
 import com.aihuiji.meeting.core.provider.MinutesRequest
 import com.aihuiji.meeting.core.provider.ProviderBundle
 import com.aihuiji.meeting.core.provider.ProviderFactory
@@ -33,6 +37,7 @@ import com.aihuiji.meeting.data.MeetingRepository
 import com.aihuiji.meeting.data.SettingsStore
 import com.aihuiji.meeting.service.MeetingForegroundService
 import com.aihuiji.meeting.service.ProjectionConsent
+import com.aihuiji.meeting.ui.labels.ProviderErrorText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -44,6 +49,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 
 sealed interface MicStatus {
@@ -67,6 +73,9 @@ data class LiveMeeting(
     val translationEnabled: Boolean = config.translationEnabled,
     val targetLangs: List<Lang> = config.targetLangs,
     val location: ProviderLocation = ProviderLocation.DEMO,
+    val backend: BackendKind = BackendKind.DEMO,
+    /** Explained backend failure (unreachable SCH-900S, rejected cloud key, timeout); null when healthy. */
+    val serviceError: String? = null,
 ) {
     val state: MeetingState get() = record.state
     val isPaused: Boolean get() = record.state == MeetingState.PAUSED
@@ -108,12 +117,40 @@ class MeetingController(
     private var pausedAt = -1L
     private val speakerKeys = mutableMapOf<String, String>()
     private var lastSave = 0L
+    @Volatile private var asrErrorText: String? = null
+    @Volatile private var translationErrorText: String? = null
+    @Volatile private var fallbackText: String? = null
 
     fun elapsed(): Long = if (startRealtime == 0L) 0 else SystemClock.elapsedRealtime() - startRealtime
 
     fun bundleFor(profileId: String): ProviderBundle {
         val profile = settings.value.profiles.firstOrNull { it.id == profileId } ?: settings.value.activeProfile
         return providers.create(profile)
+    }
+
+    /**
+     * With 允许回退到腾讯混元云 on, a meeting set to a live SCH-900S whose health check fails within
+     * [FALLBACK_PROBE_MS] runs on the Hunyuan cloud profile instead (ASR, translation and minutes).
+     */
+    private suspend fun fallbackIfDown(b: ProviderBundle): ProviderBundle {
+        val s = settings.value
+        if (!s.allowCloudFallback || b.backend != BackendKind.SCH900S_ON_PREM) return b
+        val cloud = s.profiles.firstOrNull { it.isCloud && !it.demoBackend } ?: return b
+        val health = withTimeoutOrNull(FALLBACK_PROBE_MS) { b.gateway.health() }
+        if (health is HealthResult.Ok) return b
+        val fb = providers.create(cloud)
+        bundle = fb
+        fallbackText = context.getString(R.string.fallback_to_cloud)
+        _live.update {
+            it?.copy(
+                record = it.record.copy(profileId = cloud.id),
+                config = it.config.copy(profileId = cloud.id),
+                location = fb.location,
+                backend = fb.backend,
+                serviceError = fallbackText,
+            )
+        }
+        return fb
     }
 
     // ---------------------------------------------------------------- lifecycle
@@ -157,6 +194,7 @@ class MeetingController(
             mic = mic,
             far = if (config.mode == MeetingMode.VIDEO) (if (wantsFar) FarStatus.ACTIVE else FarStatus.UNAVAILABLE) else FarStatus.NOT_NEEDED,
             location = b.location,
+            backend = b.backend,
         )
         scope.launch { repository.save(record) }
 
@@ -166,10 +204,23 @@ class MeetingController(
         if (config.recordOnly) {
             _live.update { it?.copy(link = LinkState.OFFLINE) }
         } else jobs += scope.launch {
-            val session = b.asr.open(AsrSessionConfig(id, config.primaryLang, config.autoDetect, channels, ::elapsed))
+            val early = ArrayDeque<AudioFrame>()
+            audio.onFrame = { f -> synchronized(early) { if (early.size < EARLY_FRAMES) early.addLast(f) } }
+            val active = fallbackIfDown(b)
+            val session = active.asr.open(AsrSessionConfig(id, config.primaryLang, config.autoDetect, channels, ::elapsed))
             asr = session
-            audio.onFrame = { session.sendAudio(it) }
+            synchronized(early) {
+                early.forEach(session::sendAudio)
+                early.clear()
+                audio.onFrame = { session.sendAudio(it) }
+            }
             launch { session.link.collect { l -> _live.update { it?.copy(link = l) } } }
+            launch {
+                session.error.collect { e ->
+                    asrErrorText = e?.let { ProviderErrorText.describe(context, it) }
+                    _live.update { it?.copy(serviceError = asrErrorText ?: translationErrorText ?: fallbackText) }
+                }
+            }
             session.events.collect(::onAsrEvent)
         }
         jobs += scope.launch {
@@ -289,6 +340,9 @@ class MeetingController(
 
     private fun reset() {
         _live.value = null
+        asrErrorText = null
+        translationErrorText = null
+        fallbackText = null
         asr = null
         engine = null
         startRealtime = 0
@@ -333,8 +387,9 @@ class MeetingController(
             _generation.value = Generation(id, 1f, done = true)
             if (announce) TakeawayActivity.open(context, id)
         } catch (e: Exception) {
-            repository.save(rec.copy(state = MeetingState.FAILED, failureReason = e.message ?: e.javaClass.simpleName))
-            _generation.value = Generation(id, 0f, error = e.message ?: e.javaClass.simpleName)
+            val reason = ProviderErrorText.describe(context, e)
+            repository.save(rec.copy(state = MeetingState.FAILED, failureReason = reason))
+            _generation.value = Generation(id, 0f, error = reason)
         }
     }
 
@@ -433,11 +488,16 @@ class MeetingController(
         val b = bundle ?: return
         live.targetLangs.filter { it != seg.lang && it !in seg.translations }.forEach { target ->
             scope.launch {
-                val text = runCatching { b.translation.translate(seg.text, seg.lang, target) }.getOrNull() ?: return@launch
+                val result = runCatching { b.translation.translate(seg.text, seg.lang, target) }
+                translationErrorText = result.exceptionOrNull()?.let { ProviderErrorText.describe(context, it) }
+                val text = result.getOrNull()
                 _live.update { l ->
-                    l?.copy(record = l.record.copy(segments = l.record.segments.map {
-                        if (it.id == seg.id) it.copy(translations = it.translations + (target to text)) else it
-                    }))
+                    l?.copy(
+                        record = if (text == null) l.record else l.record.copy(segments = l.record.segments.map {
+                            if (it.id == seg.id) it.copy(translations = it.translations + (target to text)) else it
+                        }),
+                        serviceError = asrErrorText ?: translationErrorText ?: fallbackText,
+                    )
                 }
             }
         }
@@ -445,6 +505,8 @@ class MeetingController(
 
     companion object {
         const val RECORD_ONLY = "record_only"
+        private const val FALLBACK_PROBE_MS = 3_000L
+        private const val EARLY_FRAMES = 500
     }
 
     private fun persistThrottled() {

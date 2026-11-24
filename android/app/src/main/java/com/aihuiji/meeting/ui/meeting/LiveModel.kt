@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -40,6 +41,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.CloudDone
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.EditNote
+import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.MicOff
 import androidx.compose.material.icons.outlined.MoreHoriz
@@ -73,6 +75,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -177,6 +180,22 @@ fun LinkBanner(link: LinkState, modifier: Modifier) {
     }
     AnimatedVisibility(text != null, modifier = modifier, enter = fadeIn() + slideInVertically(), exit = fadeOut() + slideOutVertically()) {
         StatusPill(text.orEmpty(), color, icon = icon)
+    }
+}
+
+/** Backend failure explained in one or two lines (e.g. SCH-900S unreachable, cloud key rejected). */
+@Composable
+fun ServiceErrorBanner(text: String?, modifier: Modifier) {
+    AnimatedVisibility(text != null, modifier = modifier, enter = fadeIn() + slideInVertically { it }, exit = fadeOut() + slideOutVertically { it }) {
+        Row(
+            Modifier.widthIn(max = 1200.dp).clip(RoundedCornerShape(20.dp)).background(Palette.Bg2.copy(alpha = 0.95f))
+                .border(1.dp, Palette.Danger.copy(alpha = 0.6f), RoundedCornerShape(20.dp)).padding(horizontal = 18.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Outlined.ErrorOutline, null, tint = Palette.Danger, modifier = Modifier.size(26.dp))
+            Spacer(Modifier.width(10.dp))
+            Text(text.orEmpty(), style = Type.Caption, color = Palette.Text1, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 

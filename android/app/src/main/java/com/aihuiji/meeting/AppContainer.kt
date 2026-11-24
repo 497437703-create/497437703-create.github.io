@@ -21,7 +21,7 @@ class AppContainer(context: Context) {
     val settings = SettingsStore(context)
     val tokens = TokenVault(context)
     val repository = MeetingRepository(File(context.filesDir, "meetings"))
-    val providers = ProviderFactory(File(context.cacheDir, "spool").apply { mkdirs() }) { tokens.get(it) }
+    val providers = ProviderFactory(File(context.cacheDir, "spool").apply { mkdirs() }) { id, slot -> tokens.get(slot.key(id)) }
     val deviceChecker = DeviceChecker(context)
     val meetingController = MeetingController(context, settings, repository, providers)
     val exporter = Exporter(context)

@@ -355,6 +355,7 @@ private fun BarBody(
                         .background(Brush.verticalGradient(listOf(Palette.Bg0.copy(alpha = 0.96f), Color.Transparent))),
                 )
                 LinkBanner(model.live.link, Modifier.align(Alignment.TopCenter).padding(top = 8.dp))
+                ServiceErrorBanner(model.live.serviceError, Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp, start = 20.dp, end = 20.dp))
                 lastMark?.let { mark ->
                     MarkFeedback(
                         mark = mark,

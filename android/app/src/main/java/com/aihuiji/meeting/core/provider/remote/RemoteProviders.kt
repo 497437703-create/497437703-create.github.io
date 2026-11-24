@@ -14,10 +14,12 @@ import com.aihuiji.meeting.core.provider.AudioFrame
 import com.aihuiji.meeting.core.provider.HealthResult
 import com.aihuiji.meeting.core.provider.MinutesProvider
 import com.aihuiji.meeting.core.provider.MinutesRequest
-import com.aihuiji.meeting.core.provider.ProviderBundle
+import com.aihuiji.meeting.core.provider.ProviderErrors
+import com.aihuiji.meeting.core.provider.ProviderException
 import com.aihuiji.meeting.core.provider.ProviderLocation
 import com.aihuiji.meeting.core.provider.ServerCapabilities
 import com.aihuiji.meeting.core.provider.ServerGateway
+import com.aihuiji.meeting.core.provider.ServiceKind
 import com.aihuiji.meeting.core.provider.SpeakerIdentity
 import com.aihuiji.meeting.core.provider.SpeakerProvider
 import com.aihuiji.meeting.core.provider.TranslationProvider
@@ -54,11 +56,11 @@ import java.nio.ByteOrder
 import java.util.concurrent.TimeUnit
 
 /** HTTP/WebSocket client for one server profile; see [RemoteContract] for the provisional wire format. */
-class RemoteClient(baseUrl: String, private val tokenProvider: () -> String?) {
-    val base: String = baseUrl.trimEnd('/')
+class RemoteClient(baseUrl: String, val timeoutSec: Int = 30, private val tokenProvider: () -> String?) {
+    val base: String = baseUrl.trim().trimEnd('/')
     val http: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(timeoutSec.toLong().coerceAtMost(10), TimeUnit.SECONDS)
+        .readTimeout(timeoutSec.toLong(), TimeUnit.SECONDS)
         .pingInterval(10, TimeUnit.SECONDS)
         .build()
     private val jsonType = "application/json; charset=utf-8".toMediaType()
@@ -81,24 +83,16 @@ class RemoteClient(baseUrl: String, private val tokenProvider: () -> String?) {
     fun jsonType() = jsonType
 
     suspend inline fun <reified T> execute(req: Request): T = withContext(Dispatchers.IO) {
-        http.newCall(req).execute().use { resp: Response ->
-            if (!resp.isSuccessful) throw IOException("HTTP ${resp.code} ${req.url.encodedPath}")
-            RemoteContract.json.decodeFromString<T>(resp.body?.string().orEmpty())
+        try {
+            http.newCall(req).execute().use { resp: Response ->
+                if (!resp.isSuccessful) {
+                    throw ProviderErrors.forHttp(resp.code, resp.body?.string().orEmpty(), ServiceKind.GATEWAY, req.url.toString(), onPrem = true)
+                }
+                RemoteContract.json.decodeFromString<T>(resp.body?.string().orEmpty())
+            }
+        } catch (e: Exception) {
+            throw ProviderErrors.classify(e, ServiceKind.GATEWAY, req.url.toString(), onPrem = true, timeoutSec = timeoutSec)
         }
-    }
-}
-
-object RemoteBackend {
-    fun bundle(baseUrl: String, tokenProvider: () -> String?, spoolDir: File): ProviderBundle {
-        val client = RemoteClient(baseUrl, tokenProvider)
-        return ProviderBundle(
-            location = ProviderLocation.REMOTE,
-            gateway = RemoteGateway(client),
-            asr = RemoteAsrProvider(client, spoolDir),
-            translation = RemoteTranslationProvider(client),
-            speaker = RemoteSpeakerProvider(client),
-            minutes = RemoteMinutesProvider(client),
-        )
     }
 }
 
@@ -124,14 +118,19 @@ class RemoteGateway(private val client: RemoteClient) : ServerGateway {
             )
         }
     } catch (e: Exception) {
-        HealthResult.Unavailable(e.message ?: e.javaClass.simpleName)
+        val err = ProviderErrors.classify(e, ServiceKind.GATEWAY, client.base, onPrem = true, timeoutSec = client.timeoutSec)
+        HealthResult.Unavailable(err.message.orEmpty(), err)
     }
 }
 
-class RemoteAsrProvider(private val client: RemoteClient, private val spoolDir: File) : AsrProvider {
+class RemoteAsrProvider(
+    private val client: RemoteClient,
+    private val spoolDir: File,
+    private val path: String = "/v1/asr/stream",
+) : AsrProvider {
     override val location = ProviderLocation.REMOTE
     override suspend fun open(config: AsrSessionConfig): AsrSession =
-        RemoteAsrSession(client, config, FrameSpool(File(spoolDir, "${config.meetingId}.spool")))
+        RemoteAsrSession(client, config, FrameSpool(File(spoolDir, "${config.meetingId}.spool")), path)
 }
 
 /**
@@ -142,12 +141,15 @@ class RemoteAsrSession(
     private val client: RemoteClient,
     private val config: AsrSessionConfig,
     private val spool: FrameSpool,
+    private val path: String = "/v1/asr/stream",
 ) : AsrSession {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val _events = MutableSharedFlow<AsrEvent>(extraBufferCapacity = 512)
     override val events: SharedFlow<AsrEvent> = _events.asSharedFlow()
     private val _link = MutableStateFlow(LinkState.CONNECTING)
     override val link: StateFlow<LinkState> = _link.asStateFlow()
+    private val _error = MutableStateFlow<ProviderException?>(null)
+    override val error: StateFlow<ProviderException?> = _error.asStateFlow()
 
     @Volatile private var socket: WebSocket? = null
     @Volatile private var closed = false
@@ -160,9 +162,9 @@ class RemoteAsrSession(
     private fun connect() {
         if (closed) return
         val channels = config.channels.joinToString(",") { it.name.lowercase() }
-        val path = "/v1/asr/stream?meeting=${config.meetingId}&lang=${config.primaryLang.code}" +
+        val query = "$path?meeting=${config.meetingId}&lang=${config.primaryLang.code}" +
             "&auto=${config.autoDetect}&channels=$channels"
-        val req = client.request("").url(client.wsUrl(path)).build()
+        val req = client.request("").url(client.wsUrl(query)).build()
         client.http.newWebSocket(req, Listener())
     }
 
@@ -170,6 +172,7 @@ class RemoteAsrSession(
         override fun onOpen(webSocket: WebSocket, response: Response) {
             socket = webSocket
             attempt = 0
+            _error.value = null
             val replayed = spool.drain { webSocket.send(encode(it)) }
             if (paused) webSocket.send(control("pause"))
             _link.value = if (replayed > 0) LinkState.BACKFILLED else LinkState.CONNECTED
@@ -192,7 +195,18 @@ class RemoteAsrSession(
 
         override fun onMessage(webSocket: WebSocket, bytes: ByteString) = Unit
 
-        override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) = scheduleReconnect()
+        override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+            val endpoint = client.wsUrl(path)
+            val e = if (response != null && !response.isSuccessful) {
+                ProviderErrors.forHttp(response.code, response.message, ServiceKind.ASR, endpoint, onPrem = true)
+            } else ProviderErrors.classify(t, ServiceKind.ASR, endpoint, onPrem = true, timeoutSec = client.timeoutSec)
+            _error.value = e
+            if (e.fatal) {
+                socket = null
+                _link.value = LinkState.OFFLINE
+                closedAck?.complete(Unit)
+            } else scheduleReconnect()
+        }
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
             closedAck?.complete(Unit)
@@ -257,8 +271,11 @@ class RemoteAsrSession(
 }
 
 class RemoteTranslationProvider(private val client: RemoteClient) : TranslationProvider {
-    override suspend fun translate(text: String, from: Lang, to: Lang): String =
+    override suspend fun translate(text: String, from: Lang, to: Lang): String = try {
         client.post<TranslateRequestDto, TranslateResponseDto>("/v1/translate", TranslateRequestDto(text, from.code, to.code)).text
+    } catch (e: ProviderException) {
+        throw e.withService(ServiceKind.TRANSLATION)
+    }
 }
 
 class RemoteSpeakerProvider(private val client: RemoteClient) : SpeakerProvider {

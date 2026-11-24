@@ -171,7 +171,10 @@ private fun IdleToolbar(
                     ) {
                         Box(Modifier.size(14.dp).clip(CircleShape).background(Palette.Success))
                         Spacer(Modifier.width(10.dp))
-                        Text(stringResource(R.string.idle_ready), style = Type.Label.copy(fontSize = 22.sp), maxLines = 1)
+                        val profile = settings.activeProfile
+                        val backend = stringResource(if (profile.isCloud) R.string.backend_cloud_short else R.string.backend_onprem_short)
+                        val label = if (profile.demoBackend) "$backend（${stringResource(R.string.backend_demo_short)}）" else backend
+                        Text(stringResource(R.string.idle_ready_backend, label), style = Type.Label.copy(fontSize = 22.sp), maxLines = 1)
                     }
                 }
             }
